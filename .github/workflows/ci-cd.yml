@@ -6,22 +6,17 @@ on:
   pull_request:
     branches: [ main, develop ]
 
-# Make environment variables available to all jobs
 env:
   NODE_VERSION: '18.x'
   CI: true
-  # Default environment
   ENVIRONMENT: ${{ github.ref == 'refs/heads/main' && 'production' || 'preview' }}
 
-# Set default shell and working directory for all jobs
 defaults:
   run:
     shell: bash
     working-directory: ./
 
-# Define the jobs that make up the workflow
 jobs:
-  # Job to run tests
   test:
     name: Run Tests
     runs-on: ubuntu-latest
@@ -44,7 +39,7 @@ jobs:
         npm test -- --coverage --watchAll=false
         
     - name: Upload coverage to Codecov
-      if: github.event_name != 'pull_request'  # Only run on push to branches
+      if: github.event_name != 'pull_request'
       uses: codecov/codecov-action@v3
       with:
         token: ${{ secrets.CODECOV_TOKEN || 'dummy-token' }}
@@ -52,11 +47,10 @@ jobs:
         fail_ci_if_error: false
         verbose: true
 
-  # Job to build and deploy the application
   build-and-deploy:
     name: Build and Deploy
     needs: test
-    if: github.event_name != 'pull_request'  # Only run on push to branches
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     
     steps:
@@ -85,24 +79,20 @@ jobs:
     - name: Install Vercel CLI
       run: npm install --global vercel@latest
       
-    - name: Pull Vercel Environment Information
-      run: |
-        if [ -n "${{ secrets.VERCEL_TOKEN }}" ]; then
-          vercel pull --yes --environment=${{ env.ENVIRONMENT }} --token=${{ secrets.VERCEL_TOKEN }}
-        else
-          echo "Vercel token not found. Skipping environment pull."
-        fi
-      
-    - name: Build Project Artifacts
-      if: secrets.VERCEL_TOKEN != ''
-      run: |
-        vercel build --token=${{ secrets.VERCEL_TOKEN }}
-      
     - name: Deploy to Vercel
-      if: secrets.VERCEL_TOKEN != ''
+      env:
+        VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+        VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
       run: |
+        if [ -z "$VERCEL_TOKEN" ]; then
+          echo "Vercel token not found. Skipping deployment."
+          exit 0
+        fi
+        
         if [ "${{ env.ENVIRONMENT }}" = "production" ]; then
-          vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }}
+          echo "Deploying to production"
+          vercel --prod --token=${{ secrets.VERCEL_TOKEN }} --confirm
         else
-          vercel deploy --token=${{ secrets.VERCEL_TOKEN }}
+          echo "Deploying preview"
+          vercel --token=${{ secrets.VERCEL_TOKEN }} --confirm
         fi
