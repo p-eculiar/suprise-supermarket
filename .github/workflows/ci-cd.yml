@@ -94,12 +94,11 @@ jobs:
         fi
       
     - name: Build Project Artifacts
-      if: ${{ secrets.VERCEL_TOKEN }} != ''
-      run: |
-        vercel build --token=${{ secrets.VERCEL_TOKEN }}
-      
+      if: ${{ secrets.VERCEL_TOKEN != '' }}
+      run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
+  
     - name: Deploy to Vercel
-      if: secrets.VERCEL_TOKEN != ''
+      if: ${{ secrets.VERCEL_TOKEN != '' }}
       run: |
         if [ "${{ env.ENVIRONMENT }}" = "production" ]; then
           vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }}
