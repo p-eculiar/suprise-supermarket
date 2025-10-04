@@ -1,0 +1,108 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+# Make environment variables available to all jobs
+env:
+  NODE_VERSION: '18.x'
+  CI: true
+  # Default environment
+  ENVIRONMENT: ${{ github.ref == 'refs/heads/main' && 'production' || 'preview' }}
+
+# Set default shell and working directory for all jobs
+defaults:
+  run:
+    shell: bash
+    working-directory: ./
+
+# Define the jobs that make up the workflow
+jobs:
+  # Job to run tests
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Run tests with coverage
+      run: |
+        npm test -- --coverage --watchAll=false
+        
+    - name: Upload coverage to Codecov
+      if: github.event_name != 'pull_request'  # Only run on push to branches
+      uses: codecov/codecov-action@v3
+      with:
+        token: ${{ secrets.CODECOV_TOKEN || 'dummy-token' }}
+        file: ./coverage/lcov.info
+        fail_ci_if_error: false
+        verbose: true
+
+  # Job to build and deploy the application
+  build-and-deploy:
+    name: Build and Deploy
+    needs: test
+    if: github.event_name != 'pull_request'  # Only run on push to branches
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Build application
+      run: |
+        if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+          echo "Building for production"
+          npm run build:prod
+        else
+          echo "Building for ${{ env.ENVIRONMENT }}"
+          npm run build
+        fi
+        
+    - name: Install Vercel CLI
+      run: npm install --global vercel@latest
+      
+    - name: Pull Vercel Environment Information
+      run: |
+        if [ -n "${{ secrets.VERCEL_TOKEN }}" ]; then
+          vercel pull --yes --environment=${{ env.ENVIRONMENT }} --token=${{ secrets.VERCEL_TOKEN }}
+        else
+          echo "Vercel token not found. Skipping environment pull."
+        fi
+      
+    - name: Build Project Artifacts
+      if: secrets.VERCEL_TOKEN != ''
+      run: |
+        vercel build --token=${{ secrets.VERCEL_TOKEN }}
+      
+    - name: Deploy to Vercel
+      if: secrets.VERCEL_TOKEN != ''
+      run: |
+        if [ "${{ env.ENVIRONMENT }}" = "production" ]; then
+          vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }}
+        else
+          vercel deploy --token=${{ secrets.VERCEL_TOKEN }}
+        fi
