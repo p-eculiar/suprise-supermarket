@@ -63,50 +63,31 @@ jobs:
         node-version: ${{ env.NODE_VERSION }}
         cache: 'npm'
     
-    - name: Install dependencies
-      run: npm ci
-      
-    - name: Build application
-      run: |
-        if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-          echo "Building for production"
-          npm run build:prod
-        else
-          echo "Building for ${{ env.ENVIRONMENT }}"
-          npm run build
-        fi
-        
     - name: Install Vercel CLI
       run: npm install --global vercel@latest
       
-<<<<<<< HEAD
-    - name: Deploy to Vercel
-      env:
-        VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-        VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-=======
     - name: Pull Vercel Environment Information
-      if: ${{ github.event_name != 'pull_request' && github.event_name != '' }}
+      if: github.event_name != 'pull_request' && github.event_name != ''
       run: |
         vercel pull --yes --environment=${{ env.ENVIRONMENT }} --token=${{ secrets.VERCEL_TOKEN }}
       
     - name: Build Project Artifacts
-      if: ${{ github.event_name != 'pull_request' && github.event_name != '' }}
+      if: github.event_name != 'pull_request' && github.event_name != ''
       run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
   
     - name: Deploy to Vercel
-      if: ${{ github.event_name != 'pull_request' && github.event_name != '' }}
->>>>>>> 51b040afeac773636d8e4804fa7c25909d556a57
+      if: github.event_name != 'pull_request' && github.event_name != ''
+      env:
+        VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       run: |
         if [ -z "$VERCEL_TOKEN" ]; then
           echo "Vercel token not found. Skipping deployment."
           exit 0
-        fi
         
         if [ "${{ env.ENVIRONMENT }}" = "production" ]; then
           echo "Deploying to production"
-          vercel --prod --token=${{ secrets.VERCEL_TOKEN }} --confirm
+          vercel --prod --token=$VERCEL_TOKEN --confirm
         else
           echo "Deploying preview"
-          vercel --token=${{ secrets.VERCEL_TOKEN }} --confirm
+          vercel --token=$VERCEL_TOKEN --confirm
         fi
