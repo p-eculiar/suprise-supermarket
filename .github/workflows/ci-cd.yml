@@ -94,7 +94,7 @@ jobs:
         fi
       
     - name: Build Project Artifacts
-      if: secrets.VERCEL_TOKEN != ''
+      if: ${{ secrets.VERCEL_TOKEN }} != ''
       run: |
         vercel build --token=${{ secrets.VERCEL_TOKEN }}
       
