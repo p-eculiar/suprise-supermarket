@@ -79,10 +79,24 @@ jobs:
     - name: Install Vercel CLI
       run: npm install --global vercel@latest
       
+<<<<<<< HEAD
     - name: Deploy to Vercel
       env:
         VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
         VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+=======
+    - name: Pull Vercel Environment Information
+      if: ${{ github.event_name != 'pull_request' && github.event_name != '' }}
+      run: |
+        vercel pull --yes --environment=${{ env.ENVIRONMENT }} --token=${{ secrets.VERCEL_TOKEN }}
+      
+    - name: Build Project Artifacts
+      if: ${{ github.event_name != 'pull_request' && github.event_name != '' }}
+      run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
+  
+    - name: Deploy to Vercel
+      if: ${{ github.event_name != 'pull_request' && github.event_name != '' }}
+>>>>>>> 51b040afeac773636d8e4804fa7c25909d556a57
       run: |
         if [ -z "$VERCEL_TOKEN" ]; then
           echo "Vercel token not found. Skipping deployment."
