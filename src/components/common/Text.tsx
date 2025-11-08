@@ -6,18 +6,22 @@ type TextColor = 'primary' | 'secondary' | 'error' | 'success' | 'warning' | 'te
 type TextWeight = 'normal' | 'medium' | 'semibold' | 'bold';
 type TextSize = 'xs' | 'sm' | 'base' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl';
 
-interface TextProps {
+export interface TextProps {
   children: ReactNode;
   as?: TextVariant;
   color?: TextColor;
   size?: TextSize;
   weight?: TextWeight;
+  variant?: string;
   className?: string;
   align?: 'left' | 'center' | 'right' | 'justify';
+  textAlign?: 'left' | 'center' | 'right' | 'justify';
   mb?: number | string;
   mt?: number | string;
   ml?: number | string;
   mr?: number | string;
+  mx?: number | string | 'auto';
+  maxWidth?: string;
   onClick?: () => void;
   style?: React.CSSProperties;
 }
@@ -56,11 +60,13 @@ const StyledText = styled.span<Omit<TextProps, 'children' | 'as'>>`
     return weights[weight as keyof typeof weights] || weight;
   }};
   
-  text-align: ${({ align }) => align || 'left'};
+  text-align: ${({ align, textAlign }) => textAlign || align || 'left'};
   ${({ mb }) => mb && `margin-bottom: ${typeof mb === 'number' ? `${mb}px` : mb};`}
   ${({ mt }) => mt && `margin-top: ${typeof mt === 'number' ? `${mt}px` : mt};`}
   ${({ ml }) => ml && `margin-left: ${typeof ml === 'number' ? `${ml}px` : ml};`}
   ${({ mr }) => mr && `margin-right: ${typeof mr === 'number' ? `${mr}px` : mr};`}
+  ${({ mx }) => mx && `margin-left: ${mx === 'auto' ? 'auto' : (typeof mx === 'number' ? `${mx}px` : mx)}; margin-right: ${mx === 'auto' ? 'auto' : (typeof mx === 'number' ? `${mx}px` : mx)};`}
+  ${({ maxWidth }) => maxWidth && `max-width: ${maxWidth};`}
   
   ${({ onClick }) =>
     onClick &&

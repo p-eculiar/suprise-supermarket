@@ -9,6 +9,8 @@ export interface CardProps {
   children: React.ReactNode;
   className?: string;
   onClick?: () => void;
+  maxWidth?: string;
+  width?: string;
 }
 
 export const Card: React.FC<CardProps> = ({
@@ -17,11 +19,15 @@ export const Card: React.FC<CardProps> = ({
   children,
   className,
   onClick,
+  maxWidth,
+  width,
 }) => {
   return (
     <CardContainer
       $variant={variant}
       $hoverEffect={hoverEffect}
+      $maxWidth={maxWidth}
+      $width={width}
       className={className}
       onClick={onClick}
       $clickable={!!onClick}
@@ -35,12 +41,15 @@ const CardContainer = styled.div<{
   $variant: CardVariant;
   $hoverEffect: 'elevate' | 'scale' | 'none';
   $clickable: boolean;
+  $maxWidth?: string;
+  $width?: string;
 }>`
   border-radius: ${({ theme }) => theme.shape.borderRadius}px;
   overflow: hidden;
   transition: all ${({ theme }) => theme.transitions.duration.standard}ms;
   position: relative;
-  width: 100%;
+  width: ${({ $width }) => $width || '100%'};
+  ${({ $maxWidth }) => $maxWidth && `max-width: ${$maxWidth};`}
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -62,7 +71,7 @@ const CardContainer = styled.div<{
       
       case 'filled':
         return css`
-          background-color: ${theme.colors.common.gray[50]};
+          background-color: ${theme.colors.common.gray[100]};
         `;
       
       case 'glass':
@@ -126,9 +135,9 @@ export const CardContent = styled.div`
 
 // Card Footer Component
 export const CardFooter = styled.div`
-  padding: ${({ theme }) => theme.spacing(2, 3)};
+  padding: ${({ theme }) => `${theme.spacing(2)} ${theme.spacing(3)}`};
   border-top: 1px solid ${({ theme }) => theme.colors.common.gray[100]};
-  background-color: ${({ theme }) => theme.colors.common.gray[50]};
+  background-color: ${({ theme }) => theme.colors.common.gray[100]};
   display: flex;
   justify-content: space-between;
   align-items: center;

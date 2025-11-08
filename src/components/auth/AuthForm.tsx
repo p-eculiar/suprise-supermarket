@@ -133,7 +133,7 @@ const FormContainer = styled.div`
   padding: 2rem;
   background: ${({ theme }) => theme.colors.background.paper};
   border-radius: ${({ theme }) => theme.borderRadius.lg};
-  box-shadow: ${({ theme }) => theme.shadows.sm};
+  box-shadow: ${({ theme }) => (theme.shadows as any).sm};
 `;
 
 const FormHeader = styled.div`
@@ -142,7 +142,7 @@ const FormHeader = styled.div`
 
   h2 {
     margin: 0 0 0.5rem;
-    color: ${({ theme }) => theme.colors.text.primary};
+    color: ${({ theme }) => theme.colors.text?.primary || theme.colors.secondary.main};
     font-size: 1.5rem;
     font-weight: 600;
   }
@@ -189,7 +189,7 @@ const PasswordToggle = styled.button`
   transition: background-color 0.2s;
   
   &:hover {
-    background-color: ${({ theme }) => theme.colors.background.light};
+    background-color: ${({ theme }) => (theme.colors.background as any).secondary || theme.colors.common.gray[100]};
   }
 `;
 
@@ -197,8 +197,8 @@ const ErrorAlert = styled.div`
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background-color: ${({ theme }) => theme.colors.error.light};
-  color: ${({ theme }) => theme.colors.error.dark};
+  background-color: ${({ theme }) => (theme.colors as any).error.light};
+  color: ${({ theme }) => (theme.colors as any).error.dark};
   padding: 0.75rem 1rem;
   border-radius: ${({ theme }) => theme.borderRadius.md};
   margin-bottom: 1.5rem;

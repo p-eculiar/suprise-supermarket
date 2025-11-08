@@ -32,5 +32,5 @@ const MainContent = styled.main`
   width: 100%;
   max-width: 100%;
   margin: 0 auto;
-  padding: 0 ${({ theme }) => theme.spacing(3)};
+  padding: 0;
 `;

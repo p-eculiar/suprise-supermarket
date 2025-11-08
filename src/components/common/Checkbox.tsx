@@ -27,10 +27,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
             </CheckIcon>
           </StyledCheckbox>
           {label && (
-            <Label 
-              htmlFor={props.id} 
-              $disabled={props.disabled}
-            >
+            <Label $disabled={props.disabled}>
               {label}
             </Label>
           )}
@@ -55,17 +52,17 @@ const CheckboxWrapper = styled.div<{ $hasError: boolean }>`
   display: flex;
   align-items: center;
   position: relative;
-  padding: ${({ theme }) => theme.spacing(0.5, 0)};
+  padding: ${({ theme }) => `${theme.spacing(0.5)} 0`};
   ${({ $hasError, theme }) =>
     $hasError &&
     `
     & ${/* sc-selector */ Label} {
-      color: ${theme.colors.error.main};
+      color: ${(theme.colors as any).error.main};
     }
   `}
 `;
 
-const HiddenCheckbox = styled.input.attrs({ type: 'checkbox' })`
+const HiddenCheckbox = styled.input<{ type?: string }>`
   position: absolute;
   opacity: 0;
   width: 0;
@@ -133,7 +130,7 @@ const Label = styled.span<{ $disabled?: boolean }>`
 `;
 
 const ErrorText = styled.span`
-  color: ${({ theme }) => theme.colors.error.main};
+  color: ${({ theme }) => (theme.colors as any).error.main};
   font-size: 0.75rem;
   margin-top: ${({ theme }) => theme.spacing(0.5)};
 `;

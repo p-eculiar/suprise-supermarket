@@ -1,4 +1,4 @@
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
+import { supabase } from '../lib/supabase';
 
 // Types
 export interface ContactFormData {
@@ -8,76 +8,7 @@ export interface ContactFormData {
   message: string;
 }
 
-export interface ApiResponse<T> {
-  data: T | null;
-  error?: {
-    message: string;
-    code?: string;
-  };
-  success: boolean;
-}
 
-// Create axios instance with default config
-const api: AxiosInstance = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:3001/api',
-  timeout: 10000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// Add request interceptor for auth tokens, etc.
-api.interceptors.request.use(
-  (config) => {
-    // Add auth token if exists
-    const token = localStorage.getItem('authToken');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
-
-// Add response interceptor for error handling
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response) {
-      // Server responded with a status code outside 2xx
-      const { status, data } = error.response;
-      
-      if (status === 401) {
-        // Handle unauthorized
-        console.error('Unauthorized access - please login again');
-      } else if (status === 404) {
-        console.error('The requested resource was not found');
-      } else if (status >= 500) {
-        console.error('Server error occurred');
-      }
-      
-      return Promise.reject({
-        message: data?.message || 'An error occurred',
-        code: status,
-        response: error.response
-      });
-    } else if (error.request) {
-      // Request was made but no response received
-      return Promise.reject({
-        message: 'No response from server. Please check your connection.',
-        code: 'NO_RESPONSE'
-      });
-    } else {
-      // Something happened in setting up the request
-      return Promise.reject({
-        message: error.message || 'An error occurred',
-        code: 'REQUEST_ERROR'
-      });
-    }
-  }
-);
 
 // API methods
 export const contactApi = {
@@ -88,16 +19,13 @@ export const contactApi = {
    */
   submitContactForm: async (data: ContactFormData): Promise<{ success: boolean; message: string }> => {
     try {
-      const response = await api.post<ApiResponse<{ success: boolean; message: string }>>(
-        '/contact',
-        data
-      );
+      const { error } = await supabase.from('contacts').insert([data]);
 
-      if (!response.data) {
-        throw new Error('No response data received');
+      if (error) {
+        throw error;
       }
 
-      return response.data.data!;
+      return { success: true, message: 'Form submitted successfully!' };
     } catch (error: any) {
       console.error('Contact form submission error:', error);
       throw new Error(error.message || 'Failed to submit contact form');
@@ -105,4 +33,78 @@ export const contactApi = {
   },
 };
 
-export default api;
+// Products API
+export const fetchProducts = async (filters?: any): Promise<{ data: any[], count: number }> => {
+  try {
+    let query = supabase.from('products').select('*', { count: 'exact' });
+
+    // Featured filter
+    if (filters?.isFeatured) {
+      query = query.eq('is_featured', true);
+    }
+
+    // Category filter
+    if (filters?.categories && filters.categories.length > 0) {
+      query = query.in('category', filters.categories);
+    }
+
+    // Price range filter
+    if (filters?.priceRange && filters.priceRange.length === 2) {
+      query = query.gte('price', filters.priceRange[0]).lte('price', filters.priceRange[1]);
+    }
+
+    // Rating filter
+    if (filters?.rating) {
+      query = query.gte('rating', filters.rating);
+    }
+
+    // Search query
+    if (filters?.searchQuery) {
+      query = query.ilike('name', `%${filters.searchQuery}%`);
+    }
+
+    // Sorting
+    if (filters?.sortBy) {
+      switch (filters.sortBy) {
+        case 'price-asc':
+          query = query.order('price', { ascending: true });
+          break;
+        case 'price-desc':
+          query = query.order('price', { ascending: false });
+          break;
+        case 'name-asc':
+          query = query.order('name', { ascending: true });
+          break;
+        case 'name-desc':
+          query = query.order('name', { ascending: false });
+          break;
+        case 'newest':
+          query = query.order('created_at', { ascending: false });
+          break;
+        case 'featured':
+          query = query.eq('is_featured', true).order('created_at', { ascending: false });
+          break;
+        default:
+          query = query.order('created_at', { ascending: false });
+      }
+    }
+
+    // Pagination
+    if (filters?.page && filters?.limit) {
+      const from = (filters.page - 1) * filters.limit;
+      const to = from + filters.limit - 1;
+      query = query.range(from, to);
+    } else if (filters?.limit) {
+      query = query.limit(filters.limit);
+    }
+
+    const { data, error, count } = await query;
+
+    if (error) throw error;
+    return { data: data || [], count: count || 0 };
+  } catch (error: any) {
+    console.error('Failed to fetch products:', error);
+    throw error;
+  }
+};
+

@@ -6,11 +6,13 @@ import { Loader } from '../common';
 interface ProtectedRouteProps {
   children: React.ReactElement;
   requiredRole?: 'user' | 'admin';
+  requireAdmin?: boolean;
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
   children, 
-  requiredRole = 'user' 
+  requiredRole = 'user',
+  requireAdmin = false
 }) => {
   const { user, isLoading } = useAuth();
   const location = useLocation();
@@ -25,8 +27,10 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   }
 
   // Check if user has the required role
-  if (requiredRole === 'admin' && user.role !== 'admin') {
-    return <Navigate to="/unauthorized" state={{ from: location }} replace />;
+  if (requireAdmin || requiredRole === 'admin') {
+    if (user.role !== 'admin') {
+      return <Navigate to="/" state={{ from: location }} replace />;
+    }
   }
 
   return children;

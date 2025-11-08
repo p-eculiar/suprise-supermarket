@@ -135,7 +135,6 @@ const ContactForm: React.FC<ContactFormProps> = ({
 
         <FormGroup>
           <TextArea
-            label="Your Message"
             placeholder="Type your message here..."
             rows={6}
             error={errors.message?.message}
@@ -164,7 +163,7 @@ const ContactForm: React.FC<ContactFormProps> = ({
         </Button>
 
         {submitMessage && (
-          <StatusMessage success={submitSuccess} role="alert">
+          <StatusMessage success={submitSuccess || false} role="alert">
             {submitSuccess ? (
               <FiCheckCircle className="icon" />
             ) : (
@@ -185,7 +184,7 @@ const FormContainer = styled(Box)`
   padding: 2rem;
   background: ${({ theme }) => theme.colors.background.paper};
   border-radius: ${({ theme }) => theme.borderRadius.lg};
-  box-shadow: ${({ theme }) => theme.shadows.sm};
+  box-shadow: ${({ theme }) => (theme.shadows as any).sm};
   transition: box-shadow 0.3s ease;
   position: relative;
 `;
@@ -210,10 +209,10 @@ const TextArea = styled.textarea<{ error?: string }>`
   width: 100%;
   padding: 0.75rem 1rem;
   border: 1px solid ${({ theme, error }) => 
-    error ? theme.colors.error.main : theme.colors.border};
+    error ? (theme.colors as any).error.main : (theme.colors.border?.main || theme.colors.common.gray[300])};
   border-radius: ${({ theme }) => theme.borderRadius.md};
   background: ${({ theme }) => theme.colors.background.default};
-  color: ${({ theme }) => theme.colors.text.primary};
+  color: ${({ theme }) => theme.colors.text?.primary || theme.colors.secondary.main};
   font-family: ${({ theme }) => theme.fonts.body};
   font-size: 1rem;
   line-height: 1.5;
@@ -224,19 +223,19 @@ const TextArea = styled.textarea<{ error?: string }>`
   &:focus {
     outline: none;
     border-color: ${({ theme, error }) => 
-      error ? theme.colors.error.dark : theme.colors.primary};
+      error ? (theme.colors as any).error.dark : theme.colors.primary.main};
     box-shadow: 0 0 0 2px ${({ theme, error }) => 
-      error ? `${theme.colors.error.light}80` : `${theme.colors.primary}20`};
+      error ? `${(theme.colors as any).error.light}80`  : `${theme.colors.primary.main}20`  };
   }
   
   &:disabled {
-    background: ${({ theme }) => theme.colors.grey[100]};
+    background: ${({ theme }) => (theme.colors as any).grey?.[100] || theme.colors.common.gray[100]};
     cursor: not-allowed;
     opacity: 0.7;
   }
   
   &::placeholder {
-    color: ${({ theme }) => theme.colors.text.placeholder};
+    color: ${({ theme }) => (theme.colors.text as any)?.placeholder || theme.colors.common.gray[500]};
   }
 `;
 
@@ -244,7 +243,7 @@ const ErrorMessage = styled.span`
   display: block;
   margin-top: 0.5rem;
   font-size: 0.875rem;
-  color: ${({ theme }) => theme.colors.error.main};
+  color: ${({ theme }) => (theme.colors as any).error.main};
   line-height: 1.4;
 `;
 
@@ -255,9 +254,9 @@ const StatusMessage = styled.div<{ success?: boolean }>`
   padding: 1rem;
   border-radius: ${({ theme }) => theme.borderRadius.md};
   background: ${({ theme, success }) => 
-    success ? theme.colors.success.light : theme.colors.error.light};
+    success ? (theme.colors as any).success.light : (theme.colors as any).error.light};
   color: ${({ theme, success }) => 
-    success ? theme.colors.success.dark : theme.colors.error.dark};
+    success ? (theme.colors as any).success.dark : (theme.colors as any).error.dark};
   font-size: 0.9375rem;
   line-height: 1.5;
   animation: ${keyframes`

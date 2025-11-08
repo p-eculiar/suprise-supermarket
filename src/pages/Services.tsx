@@ -1,421 +1,710 @@
 import React from 'react';
 import styled from 'styled-components';
 import { motion } from 'framer-motion';
-import { FiShoppingCart, FiTag, FiTruck, FiClock, FiShield, FiGift, FiPercent } from 'react-icons/fi';
-import { Container, Section, Heading, Text, Button } from '../components/common';
+import { 
+  FiShoppingCart, FiTruck, FiClock, FiGift, FiTag, FiShield,
+  FiStar, FiHeadphones, FiRefreshCw, FiPackage, FiCheckCircle
+} from 'react-icons/fi';
+import { Link } from 'react-router-dom';
 
 const services = [
   {
     id: 1,
-    icon: <FiShoppingCart size={40} />,
-    title: 'Live In-Store Inventory',
-    description: 'Real-time stock updates and accurate pricing for all products in our store.',
-    color: 'var(--color-primary)'
+    icon: <FiShoppingCart />,
+    title: 'Easy Online Shopping',
+    description: 'Browse thousands of products from the comfort of your home with our user-friendly interface.',
+    color: '#6C9A7F'
   },
   {
     id: 2,
-    icon: <FiGift size={40} />,
-    title: 'Digital Loyalty Program',
-    description: 'Earn points on every purchase and redeem exciting rewards and discounts.',
-    color: 'var(--color-secondary)'
+    icon: <FiTruck />,
+    title: 'Fast Delivery',
+    description: 'Get your orders delivered to your doorstep within 2 hours with our express delivery service.',
+    color: '#FFC107'
   },
   {
     id: 3,
-    icon: <FiTag size={40} />,
-    title: 'E-Coupons & Deals',
-    description: 'Exclusive digital coupons and special offers available only to our app users.',
-    color: 'var(--color-accent)'
+    icon: <FiPackage />,
+    title: 'Quality Products',
+    description: 'We ensure 100% quality and freshness for all our products with strict quality control.',
+    color: '#FF6B6B'
   },
   {
     id: 4,
-    icon: <FiTruck size={40} />,
-    title: 'Supplier Sponsorships',
-    description: 'Featured products and special promotions from our trusted suppliers.',
-    color: 'var(--color-success)'
+    icon: <FiGift />,
+    title: 'Loyalty Rewards',
+    description: 'Earn points on every purchase and redeem them for exclusive discounts and offers.',
+    color: '#4ECDC4'
   },
   {
     id: 5,
-    icon: <FiClock size={40} />,
-    title: 'Local Pickup',
-    description: 'Order online and pick up at your convenience with our contactless pickup service.',
-    color: 'var(--color-warning)'
+    icon: <FiTag />,
+    title: 'Special Offers',
+    description: 'Access exclusive deals, digital coupons, and weekly promotions on your favorite items.',
+    color: '#9B59B6'
   },
   {
     id: 6,
-    icon: <FiShield size={40} />,
-    title: 'Price Match Guarantee',
-    description: 'Found it cheaper elsewhere? We\'ll match the price plus give you 10% off!',
-    color: 'var(--color-error)'
+    icon: <FiShield />,
+    title: 'Secure Payment',
+    description: 'Multiple secure payment options with 100% buyer protection and fraud prevention.',
+    color: '#3498DB'
   },
+  {
+    id: 7,
+    icon: <FiHeadphones />,
+    title: '24/7 Support',
+    description: 'Our customer support team is available around the clock to assist you with any queries.',
+    color: '#E67E22'
+  },
+  {
+    id: 8,
+    icon: <FiRefreshCw />,
+    title: 'Easy Returns',
+    description: 'Hassle-free returns within 14 days with full refund if you\'re not satisfied with your purchase.',
+    color: '#1ABC9C'
+  }
 ];
 
-const ServicesPage: React.FC = () => {
+const features = [
+  {
+    icon: <FiCheckCircle />,
+    title: 'Fresh Products',
+    description: 'Daily fresh stock'
+  },
+  {
+    icon: <FiCheckCircle />,
+    title: 'Best Prices',
+    description: 'Competitive pricing'
+  },
+  {
+    icon: <FiCheckCircle />,
+    title: 'Wide Selection',
+    description: '10,000+ products'
+  },
+  {
+    icon: <FiCheckCircle />,
+    title: 'Trusted Brands',
+    description: 'Top quality brands'
+  }
+];
+
+const Services: React.FC = () => {
   return (
     <PageWrapper>
-      <HeroSection>
-        <Container>
+      {/* Breadcrumb & Page Header */}
+      <BreadcrumbSection>
+        <ContentContainer>
+          <PageTitle>Our Services</PageTitle>
+          <Breadcrumb>
+            <BreadcrumbLink to="/">Home</BreadcrumbLink>
+            <BreadcrumbSeparator>/</BreadcrumbSeparator>
+            <BreadcrumbCurrent>Services</BreadcrumbCurrent>
+          </Breadcrumb>
+        </ContentContainer>
+      </BreadcrumbSection>
+
+      <ContentContainer>
+        {/* Hero Section */}
+        <HeroSection>
           <HeroContent
-            initial={{ opacity: 0, y: 20 }}
+            as={motion.div}
+            initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8 }}
           >
-            <Heading as="h1" size="3xl" weight="bold" color="white" align="center">
-              Our Services
-            </Heading>
-            <Text size="lg" color="white" align="center" mt={3}>
-              Discover how we make your shopping experience better with our innovative services
-            </Text>
+            <HeroTitle>Making Your Shopping Experience Better</HeroTitle>
+            <HeroSubtitle>
+              We provide a comprehensive range of services designed to make your grocery shopping 
+              convenient, affordable, and enjoyable. Discover what makes us different.
+            </HeroSubtitle>
           </HeroContent>
-        </Container>
-      </HeroSection>
 
-      <Section>
-        <Container>
+          <FeaturesRow>
+            {features.map((feature, index) => (
+              <FeatureItem
+                key={index}
+                as={motion.div}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.1 + 0.3 }}
+              >
+                <FeatureIcon>{feature.icon}</FeatureIcon>
+                <FeatureText>
+                  <FeatureTitle>{feature.title}</FeatureTitle>
+                  <FeatureDescription>{feature.description}</FeatureDescription>
+                </FeatureText>
+              </FeatureItem>
+            ))}
+          </FeaturesRow>
+        </HeroSection>
+
+        {/* Services Grid */}
+        <ServicesSection>
+          <SectionHeader>
+            <SectionLabel>WHAT WE OFFER</SectionLabel>
+            <SectionTitle>Comprehensive Services for Your Convenience</SectionTitle>
+            <SectionSubtitle>
+              From easy online shopping to fast delivery, we've got everything you need for a seamless shopping experience.
+            </SectionSubtitle>
+          </SectionHeader>
+
           <ServicesGrid>
             {services.map((service, index) => (
               <ServiceCard
                 key={service.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
+                as={motion.div}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
                 transition={{ duration: 0.5, delay: index * 0.1 }}
+                whileHover={{ y: -10 }}
               >
-                <ServiceIcon $color={service.color}>
+                <ServiceIconWrapper $color={service.color}>
                   {service.icon}
-                </ServiceIcon>
+                </ServiceIconWrapper>
                 <ServiceTitle>{service.title}</ServiceTitle>
                 <ServiceDescription>{service.description}</ServiceDescription>
-                <LearnMoreButton
-                  $color={service.color}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  Learn More
-                </LearnMoreButton>
+                <LearnMoreLink>
+                  Learn More →
+                </LearnMoreLink>
               </ServiceCard>
             ))}
           </ServicesGrid>
-        </Container>
-      </Section>
+        </ServicesSection>
 
-      <FeatureSection>
-        <Container>
-          <FeatureContent>
-            <FeatureText
+        {/* Why Choose Us Section */}
+        <WhyChooseSection>
+          <TwoColumnGrid>
+            <ImageColumn
+              as={motion.div}
               initial={{ opacity: 0, x: -50 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.8 }}
             >
-              <Heading as="h2" size="2xl" weight="bold">
-                Special Member Benefits
-              </Heading>
-              <Text mt={3} size="md">
-                Join our loyalty program today and enjoy exclusive benefits including:
-              </Text>
-              <BenefitsList>
-                <BenefitItem>
-                  <FiPercent className="benefit-icon" />
-                  <span>10% off your first order</span>
-                </BenefitItem>
-                <BenefitItem>
-                  <FiGift className="benefit-icon" />
-                  <span>Birthday surprises and special offers</span>
-                </BenefitItem>
-                <BenefitItem>
-                  <FiTag className="benefit-icon" />
-                  <span>Exclusive member-only discounts</span>
-                </BenefitItem>
-                <BenefitItem>
-                  <FiClock className="benefit-icon" />
-                  <span>Early access to sales and new products</span>
-                </BenefitItem>
-              </BenefitsList>
-              <Button variant="primary" size="lg" mt={4}>
-                Join Now - It's Free!
-              </Button>
-            </FeatureText>
-            <FeatureImage
+              <ServiceImage src="https://images.unsplash.com/photo-1604719312566-8912e9227c6a?w=800&auto=format&fit=crop&q=80" alt="Happy Customer" />
+            </ImageColumn>
+
+            <ContentColumn
+              as={motion.div}
               initial={{ opacity: 0, x: 50 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.8, delay: 0.2 }}
             >
-              <img 
-                src="https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=800&auto=format&fit=crop&q=80" 
-                alt="Happy customer with shopping bags"
-              />
-            </FeatureImage>
-          </FeatureContent>
-        </Container>
-      </FeatureSection>
+              <SectionLabel>WHY CHOOSE US</SectionLabel>
+              <ColumnTitle>Your Trusted Grocery Partner</ColumnTitle>
+              <ColumnText>
+                With over 25 years of experience in the grocery industry, we've built a reputation 
+                for quality, reliability, and exceptional customer service. Here's why thousands of 
+                customers trust us with their grocery needs:
+              </ColumnText>
 
-      <CtaSection>
-        <Container>
-          <CtaContent>
-            <Heading as="h2" size="2xl" weight="bold" color="white" align="center">
-              Ready to Experience the Difference?
-            </Heading>
-            <Text size="lg" color="white" align="center" mt={3} mb={5}>
-              Download our app now and get $5 off your first order!
-            </Text>
+              <BenefitsList>
+                <BenefitItem>
+                  <BenefitIcon><FiStar /></BenefitIcon>
+                  <BenefitText>
+                    <BenefitTitle>Premium Quality</BenefitTitle>
+                    <BenefitDesc>Only the best products make it to our shelves</BenefitDesc>
+                  </BenefitText>
+                </BenefitItem>
+
+                <BenefitItem>
+                  <BenefitIcon><FiShield /></BenefitIcon>
+                  <BenefitText>
+                    <BenefitTitle>Quality Guarantee</BenefitTitle>
+                    <BenefitDesc>100% satisfaction or your money back</BenefitDesc>
+                  </BenefitText>
+                </BenefitItem>
+
+                <BenefitItem>
+                  <BenefitIcon><FiHeadphones /></BenefitIcon>
+                  <BenefitText>
+                    <BenefitTitle>Expert Support</BenefitTitle>
+                    <BenefitDesc>Dedicated team ready to help 24/7</BenefitDesc>
+                  </BenefitText>
+                </BenefitItem>
+              </BenefitsList>
+
+              <CTAButton to="/products">
+                Start Shopping Now
+              </CTAButton>
+            </ContentColumn>
+          </TwoColumnGrid>
+        </WhyChooseSection>
+
+        {/* CTA Section */}
+        <CtaSection>
+          <CtaContent
+            as={motion.div}
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+          >
+            <CtaTitle>Ready to Experience the Difference?</CtaTitle>
+            <CtaText>
+              Join thousands of satisfied customers who trust us for their grocery needs. 
+              Sign up today and get 10% off your first order!
+            </CtaText>
             <CtaButtons>
-              <CtaButton 
-                as="a" 
-                href="#" 
-                variant="secondary" 
-                size="lg"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <AppStoreIcon />
-                App Store
+              <CtaButton to="/register" $primary>
+                Get Started
               </CtaButton>
-              <CtaButton 
-                as="a" 
-                href="#" 
-                variant="secondary" 
-                size="lg"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <PlayStoreIcon />
-                Google Play
+              <CtaButton to="/contact" $outline>
+                Contact Us
               </CtaButton>
             </CtaButtons>
           </CtaContent>
-        </Container>
-      </CtaSection>
+        </CtaSection>
+      </ContentContainer>
     </PageWrapper>
   );
 };
 
-export default ServicesPage;
+export default Services;
 
 // Styled Components
 const PageWrapper = styled.div`
-  padding-top: 80px; // Account for fixed header
+  background: #F8F9FA;
+  min-height: 100vh;
+  padding-bottom: 3rem;
+`;
+
+const BreadcrumbSection = styled.div`
+  background: white;
+  padding: 2rem 0;
+  margin-bottom: 2rem;
+`;
+
+const ContentContainer = styled.div`
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 2rem;
+`;
+
+const PageTitle = styled.h1`
+  font-size: 2rem;
+  color: #2D3436;
+  margin-bottom: 0.5rem;
+`;
+
+const Breadcrumb = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+`;
+
+const BreadcrumbLink = styled(Link)`
+  color: #6C9A7F;
+  text-decoration: none;
+  
+  &:hover {
+    text-decoration: underline;
+  }
+`;
+
+const BreadcrumbSeparator = styled.span`
+  color: #636E72;
+`;
+
+const BreadcrumbCurrent = styled.span`
+  color: #636E72;
 `;
 
 const HeroSection = styled.div`
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
-  padding: 100px 0;
+  background: linear-gradient(135deg, #6C9A7F 0%, #5A8569 100%);
+  padding: 4rem 3rem;
+  border-radius: 16px;
+  margin-bottom: 4rem;
   position: relative;
   overflow: hidden;
   
   &::before {
     content: '';
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M11 18c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm48 25c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm-43-7c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm63 31c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM34 90c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm56-76c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM12 86c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm28-65c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm23-11c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-6 60c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm29-22c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zM32 63c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm57-13c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-9-21c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM60 91c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM35 41c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM12 60c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2z' fill='%23ffffff' fill-opacity='0.1' fill-rule='evenodd'/%3E%3C/svg%3E");
-    opacity: 0.6;
+    top: -50%;
+    right: -10%;
+    width: 400px;
+    height: 400px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 50%;
+  }
+  
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: -30%;
+    left: -5%;
+    width: 300px;
+    height: 300px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 50%;
   }
 `;
 
-const HeroContent = styled(motion.div)`
+const HeroContent = styled.div`
   position: relative;
   z-index: 1;
-  max-width: 800px;
-  margin: 0 auto;
   text-align: center;
+  max-width: 800px;
+  margin: 0 auto 3rem;
+`;
+
+const HeroTitle = styled.h2`
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: white;
+  margin-bottom: 1rem;
+  
+  @media (max-width: 768px) {
+    font-size: 1.75rem;
+  }
+`;
+
+const HeroSubtitle = styled.p`
+  font-size: 1.125rem;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.7;
+`;
+
+const FeaturesRow = styled.div`
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2rem;
+  position: relative;
+  z-index: 1;
+  
+  @media (max-width: 1024px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const FeatureItem = styled.div`
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  padding: 1.5rem;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+`;
+
+const FeatureIcon = styled.div`
+  width: 48px;
+  height: 48px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  flex-shrink: 0;
+  
+  svg {
+    width: 24px;
+    height: 24px;
+  }
+`;
+
+const FeatureText = styled.div``;
+
+const FeatureTitle = styled.div`
+  font-size: 1rem;
+  font-weight: 700;
+  color: white;
+  margin-bottom: 0.25rem;
+`;
+
+const FeatureDescription = styled.div`
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.8);
+`;
+
+const ServicesSection = styled.div`
+  margin-bottom: 5rem;
+`;
+
+const SectionHeader = styled.div`
+  text-align: center;
+  max-width: 700px;
+  margin: 0 auto 3rem;
+`;
+
+const SectionLabel = styled.div`
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #6C9A7F;
+  letter-spacing: 1px;
+  margin-bottom: 0.5rem;
+`;
+
+const SectionTitle = styled.h2`
+  font-size: 2rem;
+  font-weight: 700;
+  color: #2D3436;
+  margin-bottom: 1rem;
+`;
+
+const SectionSubtitle = styled.p`
+  font-size: 1rem;
+  color: #636E72;
+  line-height: 1.6;
 `;
 
 const ServicesGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 30px;
-  margin-top: 50px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2rem;
+  
+  @media (max-width: 1200px) {
+    grid-template-columns: repeat(3, 1fr);
+  }
   
   @media (max-width: 768px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  @media (max-width: 480px) {
     grid-template-columns: 1fr;
   }
 `;
 
-const ServiceCard = styled(motion.div)`
-  background: ${({ theme }) => theme.colors.background.paper};
-  border-radius: 16px;
-  padding: 40px 30px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+const ServiceCard = styled.div`
+  background: white;
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   transition: all 0.3s ease;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  text-align: center;
-  border: 1px solid ${({ theme }) => theme.colors.border};
   
   &:hover {
-    transform: translateY(-10px);
-    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
   }
 `;
 
-const ServiceIcon = styled.div<{ $color: string }>`
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  background: ${({ $color }) => `${$color}15`};
+const ServiceIconWrapper = styled.div<{ $color: string }>`
+  width: 70px;
+  height: 70px;
+  border-radius: 16px;
+  background: ${props => `${props.$color}15`};
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 20px;
-  color: ${({ $color }) => $color};
-  font-size: 2rem;
+  color: ${props => props.$color};
+  margin-bottom: 1.5rem;
+  
+  svg {
+    width: 32px;
+    height: 32px;
+  }
 `;
 
 const ServiceTitle = styled.h3`
-  font-size: 1.5rem;
-  font-weight: 600;
-  margin-bottom: 15px;
-  color: ${({ theme }) => theme.colors.text.primary};
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #2D3436;
+  margin-bottom: 0.75rem;
 `;
 
 const ServiceDescription = styled.p`
-  color: ${({ theme }) => theme.colors.text.secondary};
-  margin-bottom: 20px;
+  font-size: 0.875rem;
+  color: #636E72;
   line-height: 1.6;
+  margin-bottom: 1.5rem;
+  flex: 1;
 `;
 
-const LearnMoreButton = styled(motion.button)<{ $color: string }>`
-  background: none;
-  border: none;
-  color: ${({ $color }) => $color};
+const LearnMoreLink = styled.a`
+  color: #6C9A7F;
+  font-size: 0.875rem;
   font-weight: 600;
-  font-size: 0.95rem;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  padding: 8px 0;
-  margin-top: auto;
+  text-decoration: none;
+  transition: all 0.3s ease;
   
-  &::after {
-    content: '→';
-    margin-left: 8px;
-    transition: transform 0.3s ease;
-  }
-  
-  &:hover::after {
+  &:hover {
+    color: #5A8569;
     transform: translateX(5px);
   }
 `;
 
-const FeatureSection = styled(Section)`
-  background: ${({ theme }) => theme.colors.background.secondary};
-  padding: 100px 0;
+const WhyChooseSection = styled.div`
+  margin-bottom: 5rem;
 `;
 
-const FeatureContent = styled.div`
+const TwoColumnGrid = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 60px;
+  gap: 4rem;
   align-items: center;
   
-  @media (max-width: 992px) {
+  @media (max-width: 1024px) {
     grid-template-columns: 1fr;
-    text-align: center;
+    gap: 3rem;
   }
 `;
 
-const FeatureText = styled(motion.div)`
-  max-width: 500px;
-  
-  @media (max-width: 992px) {
-    max-width: 100%;
-    margin: 0 auto;
-    text-align: center;
-  }
+const ImageColumn = styled.div``;
+
+const ServiceImage = styled.img`
+  width: 100%;
+  height: auto;
+  border-radius: 16px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1);
 `;
 
-const BenefitsList = styled.ul`
-  list-style: none;
-  padding: 0;
-  margin: 30px 0;
+const ContentColumn = styled.div``;
+
+const ColumnTitle = styled.h2`
+  font-size: 2rem;
+  font-weight: 700;
+  color: #2D3436;
+  margin-bottom: 1rem;
 `;
 
-const BenefitItem = styled.li`
+const ColumnText = styled.p`
+  font-size: 1rem;
+  color: #636E72;
+  line-height: 1.7;
+  margin-bottom: 2rem;
+`;
+
+const BenefitsList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+`;
+
+const BenefitItem = styled.div`
+  display: flex;
+  gap: 1rem;
+`;
+
+const BenefitIcon = styled.div`
+  width: 50px;
+  height: 50px;
+  background: #E8F5EC;
+  border-radius: 12px;
   display: flex;
   align-items: center;
-  margin-bottom: 15px;
-  color: ${({ theme }) => theme.colors.text.primary};
+  justify-content: center;
+  color: #6C9A7F;
+  flex-shrink: 0;
   
-  .benefit-icon {
-    margin-right: 15px;
-    color: var(--color-primary);
-    min-width: 24px;
-  }
-  
-  @media (max-width: 992px) {
-    justify-content: center;
+  svg {
+    width: 24px;
+    height: 24px;
   }
 `;
 
-const FeatureImage = styled(motion.div)`
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+const BenefitText = styled.div``;
+
+const BenefitTitle = styled.h4`
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #2D3436;
+  margin-bottom: 0.25rem;
+`;
+
+const BenefitDesc = styled.p`
+  font-size: 0.875rem;
+  color: #636E72;
+  margin: 0;
+`;
+
+const CTAButton = styled(Link)`
+  display: inline-block;
+  padding: 1rem 2rem;
+  background: #6C9A7F;
+  color: white;
+  text-decoration: none;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: all 0.3s ease;
   
-  img {
-    width: 100%;
-    height: auto;
-    display: block;
-    transition: transform 0.5s ease;
-  }
-  
-  &:hover img {
-    transform: scale(1.03);
-  }
-  
-  @media (max-width: 992px) {
-    max-width: 500px;
-    margin: 0 auto;
+  &:hover {
+    background: #5A8569;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(108, 154, 127, 0.3);
   }
 `;
 
 const CtaSection = styled.div`
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
-  padding: 80px 0;
+  background: linear-gradient(135deg, #6C9A7F 0%, #5A8569 100%);
+  padding: 4rem 3rem;
+  border-radius: 16px;
   text-align: center;
+  position: relative;
+  overflow: hidden;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -10%;
+    width: 400px;
+    height: 400px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 50%;
+  }
 `;
 
 const CtaContent = styled.div`
-  max-width: 800px;
+  position: relative;
+  z-index: 1;
+  max-width: 700px;
   margin: 0 auto;
+`;
+
+const CtaTitle = styled.h2`
+  font-size: 2rem;
+  font-weight: 700;
+  color: white;
+  margin-bottom: 1rem;
+`;
+
+const CtaText = styled.p`
+  font-size: 1.125rem;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 2rem;
+  line-height: 1.7;
 `;
 
 const CtaButtons = styled.div`
   display: flex;
+  gap: 1rem;
   justify-content: center;
-  gap: 20px;
-  margin-top: 30px;
   
-  @media (max-width: 576px) {
+  @media (max-width: 640px) {
     flex-direction: column;
     align-items: center;
   }
 `;
 
-const CtaButton = styled(Button)`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 24px;
-  font-weight: 600;
+const CtaButton = styled(Link)<{ $primary?: boolean; $outline?: boolean }>`
+  display: inline-block;
+  padding: 1rem 2.5rem;
+  background: ${props => props.$primary ? 'white' : 'transparent'};
+  color: ${props => props.$primary ? '#6C9A7F' : 'white'};
+  text-decoration: none;
   border-radius: 8px;
-`;
-
-const AppStoreIcon = styled.span`
-  display: inline-block;
-  width: 24px;
-  height: 24px;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 384 512'%3E%3Cpath fill='currentColor' d='M318.7 268.7c-.2-36.7 16.4-64.4 13-81.9-16.1-60.6-53.7-72.2-62.4-72.2-27.7 0-51.8 16.3-67.3 16.3-15.5 0-39.9-15.9-65.7-15.4-33.8.5-65.2 19.7-82.7 50.1-35.3 61.3-9 152.3 25.3 202.1 16.5 24.1 36.2 51.2 62.1 50.3 25-.9 34.5-16.3 64.7-16.3 30.2 0 38.7 16.3 65.2 15.7 26.9-.6 44.9-24.3 61.4-48.5 19.6-28.6 27.6-56.2 28.1-57.6-.6-.3-54-20.7-54.5-82.3zM155.9 85.4c16.8-20.4 14.5-50.2-3.6-67.9-18.6-19.1-48.9-20.6-67.6-4.6-16.8 20.4-14.5 50.2 3.6 67.9 18.9 19.1 49.1 19.8 67.6 4.6z'/%3E%3C/svg%3E") no-repeat center;
-  background-size: contain;
-`;
-
-const PlayStoreIcon = styled.span`
-  display: inline-block;
-  width: 24px;
-  height: 24px;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Cpath fill='currentColor' d='M325.3 234.3L104.6 13l280.8 161.2-60.1 60.1zM47 0C34 6.8 25.3 19.2 25.3 35.3v441.3c0 16.1 8.7 28.5 21.7 35.3l256.6-256L47 0zm425.2 225.6l-58.9-34.1-65.7 64.5 65.7 64.5 60.1-34.1c18-14.3 18-46.5-1.2-60.8zM104.6 499l280.8-161.2-60.1-60.1L104.6 499z'/%3E%3C/svg%3E") no-repeat center;
-  background-size: contain;
+  font-weight: 600;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  border: ${props => props.$outline ? '2px solid white' : 'none'};
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    background: ${props => props.$primary ? '#F8F9FA' : 'rgba(255, 255, 255, 0.1)'};
+  }
 `;

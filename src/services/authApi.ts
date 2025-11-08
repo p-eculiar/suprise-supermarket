@@ -1,5 +1,10 @@
-import { api } from './api';
+/**
+ * This file is not currently used - we use Supabase directly via AuthContext
+ * Keeping for potential future REST API integration
+ */
+
 import { User } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 
 interface LoginCredentials {
   email: string;
@@ -18,22 +23,28 @@ interface AuthResponse {
 export const authApi = {
   // Login user
   login: async (credentials: LoginCredentials): Promise<{ data: AuthResponse }> => {
-    const response = await api.post<AuthResponse>('/auth/login', credentials);
-    return response;
+    // Use Supabase instead
+    const { data, error } = await supabase.auth.signInWithPassword(credentials);
+    if (error) throw error;
+    return { data: { token: data.session?.access_token || '', user: data.user as User } };
   },
 
   // Register new user
   register: async (userData: RegisterData): Promise<{ data: AuthResponse }> => {
-    const response = await api.post<AuthResponse>('/auth/register', userData);
-    return response;
+    // Use Supabase instead
+    const { data, error } = await supabase.auth.signUp({
+      email: userData.email,
+      password: userData.password,
+    });
+    if (error) throw error;
+    return { data: { token: data.session?.access_token || '', user: data.user as User } };
   },
 
   // Get current user
   getCurrentUser: async (token: string): Promise<{ data: User }> => {
-    const response = await api.get<User>('/auth/me', {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    return response;
+    const { data, error } = await supabase.auth.getUser(token);
+    if (error) throw error;
+    return { data: data.user as User };
   },
 
   // Update user profile
@@ -42,10 +53,14 @@ export const authApi = {
     userData: Partial<RegisterData>, 
     token: string
   ): Promise<{ data: User }> => {
-    const response = await api.put<User>(`/users/${userId}`, userData, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    return response;
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({ full_name: userData.name })
+      .eq('id', userId)
+      .select()
+      .single();
+    if (error) throw error;
+    return { data: data as unknown as User };
   },
 
   // Change password
@@ -55,33 +70,35 @@ export const authApi = {
     newPassword: string,
     token: string
   ): Promise<void> => {
-    await api.post(
-      `/users/${userId}/change-password`,
-      { currentPassword, newPassword },
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      }
-    );
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) throw error;
   },
 
   // Request password reset
   requestPasswordReset: async (email: string): Promise<void> => {
-    await api.post('/auth/forgot-password', { email });
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    if (error) throw error;
   },
 
   // Reset password with token
   resetPassword: async (token: string, newPassword: string): Promise<void> => {
-    await api.post('/auth/reset-password', { token, newPassword });
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) throw error;
   },
 
   // Verify email with token
   verifyEmail: async (token: string): Promise<void> => {
-    await api.post('/auth/verify-email', { token });
+    // Supabase handles email verification automatically
+    console.log('Email verification handled by Supabase');
   },
 
   // Resend verification email
   resendVerificationEmail: async (email: string): Promise<void> => {
-    await api.post('/auth/resend-verification', { email });
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email,
+    });
+    if (error) throw error;
   },
 
   // Logout (client-side only)

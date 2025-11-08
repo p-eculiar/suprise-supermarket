@@ -1,27 +1,87 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import styled, { css } from 'styled-components';
+import { Loader } from './Loader';
 
 type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'text';
 type ButtonSize = 'small' | 'medium' | 'large';
 
-interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+// Base button props without the 'as' prop
+type BaseButtonProps = {
   variant?: ButtonVariant;
   size?: ButtonSize;
   fullWidth?: boolean;
-  to?: string;
-  as?: React.ElementType;
   children: React.ReactNode;
-}
+  loading?: boolean;
+  isLoading?: boolean; // Alias for loading for backward compatibility
+  disabled?: boolean;
+  startIcon?: React.ReactNode;
+  icon?: React.ReactNode;
+  mt?: number | string;
+  mb?: number | string;
+  ml?: number | string;
+  mr?: number | string;
+  m?: number | string;
+  mx?: number | string;
+  my?: number | string;
+  // Framer Motion props
+  whileHover?: any;
+  whileTap?: any;
+  animate?: any;
+  initial?: any;
+  exit?: any;
+  // HTML button props
+  type?: 'button' | 'submit' | 'reset';
+  onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void;
+};
+
+// Props when 'as' is 'a'
+type AnchorButtonProps = BaseButtonProps & {
+  as: 'a';
+  href: string;
+  to?: never; // Make 'to' invalid when 'as' is 'a'
+};
+
+// Props when 'to' is provided (for React Router Link)
+type LinkButtonProps = BaseButtonProps & {
+  to: string;
+  as?: React.ElementType;
+  href?: never; // Make 'href' invalid when 'to' is provided
+};
+
+// Props for regular button
+type RegularButtonProps = BaseButtonProps & {
+  to?: never;
+  as?: never;
+  href?: never;
+} & React.ButtonHTMLAttributes<HTMLButtonElement>;
+
+type ButtonProps = AnchorButtonProps | LinkButtonProps | RegularButtonProps;
 
 export const Button: React.FC<ButtonProps> = ({
   variant = 'primary',
   size = 'medium',
   fullWidth = false,
+  loading: loadingProp,
+  isLoading,
+  disabled = false,
+  startIcon,
+  icon,
   to,
   children,
+  mt,
+  mb,
+  ml,
+  mr,
+  m,
+  mx,
+  my,
   ...props
 }) => {
+  // Use loading prop if provided, otherwise fall back to isLoading for backward compatibility
+  const loading = loadingProp !== undefined ? loadingProp : isLoading || false;
+  const displayIcon = startIcon || icon;
+  
   // If 'to' prop is provided, render as a Link component
   if (to) {
     return (
@@ -30,8 +90,16 @@ export const Button: React.FC<ButtonProps> = ({
         $variant={variant}
         $size={size}
         $fullWidth={fullWidth}
+        $m={m}
+        $mt={mt}
+        $mb={mb}
+        $ml={ml}
+        $mr={mr}
+        $mx={mx}
+        $my={my}
         {...props as any}
       >
+        {displayIcon && <IconWrapper>{displayIcon}</IconWrapper>}
         {children}
       </StyledLink>
     );
@@ -43,9 +111,22 @@ export const Button: React.FC<ButtonProps> = ({
       $variant={variant}
       $size={size}
       $fullWidth={fullWidth}
+      $m={m}
+      $mt={mt}
+      $mb={mb}
+      $ml={ml}
+      $mr={mr}
+      $mx={mx}
+      $my={my}
+      disabled={disabled || loading}
+      $isLoading={loading}
       {...props}
     >
-      {children}
+      {loading && <ButtonLoader size={16} color="currentColor" />}
+      <ButtonContent $isLoading={loading}>
+        {displayIcon && <IconWrapper>{displayIcon}</IconWrapper>}
+        {children}
+      </ButtonContent>
     </StyledButton>
   );
 };
@@ -151,19 +232,81 @@ const baseButtonStyles = css<{
   }
 `;
 
-const StyledButton = styled.button<{
+const ButtonLoader = styled(Loader)<{ size: number }>`
+  margin-right: 0.5rem;
+`;
+
+const IconWrapper = styled.span`
+  display: inline-flex;
+  align-items: center;
+  margin-right: 0.5rem;
+  
+  svg {
+    width: 1.25em;
+    height: 1.25em;
+  }
+`;
+
+const ButtonContent = styled.span<{ $isLoading?: boolean }>`
+  opacity: ${({ $isLoading }) => ($isLoading ? 0.7 : 1)};
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+`;
+
+interface StyledButtonProps {
   $variant: ButtonVariant;
   $size: ButtonSize;
   $fullWidth: boolean;
-}>`
+  $isLoading?: boolean;
+  $mt?: number | string;
+  $mb?: number | string;
+  $ml?: number | string;
+  $mr?: number | string;
+  $m?: number | string;
+  $mx?: number | string;
+  $my?: number | string;
+}
+
+const StyledButton = styled.button<StyledButtonProps>`
   ${baseButtonStyles}
+  position: relative;
+  ${({ $m }) => $m && `margin: ${typeof $m === 'number' ? `${$m}px` : $m};`}
+  ${({ $mt }) => $mt && `margin-top: ${typeof $mt === 'number' ? `${$mt}px` : $mt};`}
+  ${({ $mb }) => $mb && `margin-bottom: ${typeof $mb === 'number' ? `${$mb}px` : $mb};`}
+  ${({ $ml }) => $ml && `margin-left: ${typeof $ml === 'number' ? `${$ml}px` : $ml};`}
+  ${({ $mr }) => $mr && `margin-right: ${typeof $mr === 'number' ? `${$mr}px` : $mr};`}
+  ${({ $mx }) => $mx && `margin-left: ${typeof $mx === 'number' ? `${$mx}px` : $mx}; margin-right: ${typeof $mx === 'number' ? `${$mx}px` : $mx};`}
+  ${({ $my }) => $my && `margin-top: ${typeof $my === 'number' ? `${$my}px` : $my}; margin-bottom: ${typeof $my === 'number' ? `${$my}px` : $my};`}
+  
+  ${({ $isLoading }) =>
+    $isLoading &&
+    css`
+      cursor: wait;
+      opacity: 0.9;
+    `}
 `;
 
 const StyledLink = styled(Link)<{
   $variant: ButtonVariant;
   $size: ButtonSize;
   $fullWidth: boolean;
+  $mt?: number | string;
+  $mb?: number | string;
+  $ml?: number | string;
+  $mr?: number | string;
+  $m?: number | string;
+  $mx?: number | string;
+  $my?: number | string;
 }>`
   ${baseButtonStyles}
   display: inline-flex;
+  ${({ $m }) => $m && `margin: ${typeof $m === 'number' ? `${$m}px` : $m};`}
+  ${({ $mt }) => $mt && `margin-top: ${typeof $mt === 'number' ? `${$mt}px` : $mt};`}
+  ${({ $mb }) => $mb && `margin-bottom: ${typeof $mb === 'number' ? `${$mb}px` : $mb};`}
+  ${({ $ml }) => $ml && `margin-left: ${typeof $ml === 'number' ? `${$ml}px` : $ml};`}
+  ${({ $mr }) => $mr && `margin-right: ${typeof $mr === 'number' ? `${$mr}px` : $mr};`}
+  ${({ $mx }) => $mx && `margin-left: ${typeof $mx === 'number' ? `${$mx}px` : $mx}; margin-right: ${typeof $mx === 'number' ? `${$mx}px` : $mx};`}
+  ${({ $my }) => $my && `margin-top: ${typeof $my === 'number' ? `${$my}px` : $my}; margin-bottom: ${typeof $my === 'number' ? `${$my}px` : $my};`}
 `;

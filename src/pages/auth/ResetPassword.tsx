@@ -145,7 +145,7 @@ const ResetPassword: React.FC = () => {
           </Box>
 
           <PasswordRequirements>
-            <Text as="h4" weight="600" mb={2}>Password Requirements</Text>
+            <Text as="h4" weight="semibold" mb={2}>Password Requirements</Text>
             <PasswordRequirement 
               text="At least 8 characters" 
               meets={newPassword ? newPassword.length >= 8 : false} 

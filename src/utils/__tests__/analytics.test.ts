@@ -1,58 +1,93 @@
-import { trackEvent, trackPageView, trackFormSubmission, trackError, initAnalytics } from '../analytics';
+import { trackEvent, trackPageView, trackFormSubmission, trackError, initAnalytics, sendToCustomEndpoint } from '../analytics';
 
-describe('Analytics', () => {
-  // Extend the Window interface to include gtag and dataLayer
-  interface CustomWindow extends Window {
+// Extend the Window interface to include gtag and dataLayer
+declare global {
+  interface Window {
     gtag: (...args: any[]) => void;
     dataLayer: any[];
   }
-  
-  // Mock window.gtag and window.dataLayer
+}
+
+describe('Analytics', () => {
+  // Define mock functions and data
   const mockGtag = jest.fn();
   const mockDataLayer: any[] = [];
+  const mockFetch = jest.fn().mockResolvedValue({ ok: true });
   
-  // Mock the global window object
-  const globalAny: any = global;
+  // Create a mock document implementation
+  const mockDocument = {
+    createElement: jest.fn().mockImplementation((tagName: string) => {
+      const element = document.createElement(tagName);
+      if (tagName === 'script') {
+        // @ts-ignore - Mocking script properties
+        element.async = true;
+      }
+      return element;
+    }),
+    head: {
+      appendChild: jest.fn(),
+      querySelector: jest.fn().mockReturnValue(null),
+      innerHTML: ''
+    },
+    querySelector: jest.fn().mockReturnValue(null)
+  } as unknown as Document;
+  
+  // Store original globals
+  const originalWindow = { ...global.window };
+  const originalDocument = global.document;
+  const originalNavigator = global.navigator;
+  const originalProcess = global.process;
+  const originalFetch = global.fetch;
   
   beforeAll(() => {
-    // Setup mock globals with proper typing
-    globalAny.window = {
-      ...globalAny.window,
+    // Mock window object
+    global.window = {
+      ...global.window,
       gtag: mockGtag,
       dataLayer: mockDataLayer,
-    } as CustomWindow;
+      document: mockDocument
+    } as unknown as Window & typeof globalThis;
     
-    // Mock document methods
-    document.head.innerHTML = '';
+    // Mock document
+    global.document = mockDocument;
     
-    // Mock document.createElement with proper typing
-    const originalCreateElement = document.createElement;
-    document.createElement = ((tagName: string, options?: ElementCreationOptions) => {
-      if (tagName === 'script') {
-        const script = originalCreateElement.call(document, 'script');
-        // @ts-ignore - Mocking script properties
-        script.async = true;
-        return script;
-      }
-      return originalCreateElement.call(document, tagName, options);
-    }) as typeof document.createElement;
-    
-    // Mock navigator.sendBeacon
-    Object.defineProperty(global.navigator, 'sendBeacon', {
-      value: jest.fn().mockReturnValue(true),
+    // Mock navigator
+    Object.defineProperty(global, 'navigator', {
+      value: {
+        ...originalNavigator,
+        sendBeacon: jest.fn().mockReturnValue(true)
+      },
       writable: true,
+      configurable: true
     });
     
     // Mock fetch
-    globalAny.fetch = jest.fn().mockResolvedValue({ ok: true });
+    global.fetch = mockFetch as jest.MockedFunction<typeof fetch>;
+    
+    // Mock process.env
+    global.process = {
+      ...originalProcess,
+      env: {
+        ...(originalProcess?.env || {}),
+        NODE_ENV: 'test'
+      }
+    };
   });
   
   afterAll(() => {
-    // Clean up global mocks
-    delete globalAny.window.gtag;
-    delete globalAny.window.dataLayer;
-    delete globalAny.fetch;
-    jest.restoreAllMocks();
+    // Restore original globals
+    global.window = originalWindow;
+    global.document = originalDocument;
+    Object.defineProperty(global, 'navigator', {
+      value: originalNavigator,
+      writable: true,
+      configurable: true
+    });
+    global.process = originalProcess;
+    global.fetch = originalFetch;
+    
+    // Clear all mocks
+    jest.clearAllMocks();
   });
   
   beforeEach(() => {
@@ -167,6 +202,75 @@ describe('Analytics', () => {
     });
   });
   
+  describe('Custom Endpoint', () => {
+    it('sends data to custom endpoint when configured', async () => {
+      const mockSendBeacon = jest.fn().mockReturnValue(true);
+      Object.defineProperty(global.navigator, 'sendBeacon', {
+        value: mockSendBeacon,
+        writable: true,
+      });
+      
+      initAnalytics({
+        customEndpoint: '/api/analytics',
+        debug: true
+      });
+      
+      const eventData = { action: 'test_event', category: 'test' };
+      trackEvent('test_event', eventData);
+      
+      // Wait for any async operations
+      await new Promise(process.nextTick);
+      
+      // Should use sendBeacon by default
+      expect(mockSendBeacon).toHaveBeenCalledWith(
+        '/api/analytics',
+        expect.any(Blob)
+      );
+      
+      // Verify the blob content
+      const blob = mockSendBeacon.mock.calls[0][1];
+      const text = await new Response(blob).text();
+      const parsedData = JSON.parse(text);
+      
+      expect(parsedData).toMatchObject({
+        action: 'test_event',
+        category: 'test',
+        timestamp: expect.any(String)
+      });
+    });
+    
+    it('falls back to fetch when sendBeacon is not available', async () => {
+      // Mock no sendBeacon
+      Object.defineProperty(global.navigator, 'sendBeacon', {
+        value: undefined,
+        writable: true,
+      });
+      
+      initAnalytics({
+        customEndpoint: '/api/analytics'
+      });
+      
+      const eventData = { action: 'test_event', category: 'test' };
+      trackEvent('test_event', eventData);
+      
+      // Wait for fetch to be called
+      await new Promise(process.nextTick);
+      
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/analytics',
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.any(Blob),
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          keepalive: true,
+          credentials: 'same-origin'
+        })
+      );
+    });
+  });
+
   describe('trackError', () => {
     it('tracks error objects', () => {
       initAnalytics({ googleAnalyticsId: 'GA-123' });
@@ -201,18 +305,38 @@ describe('Analytics', () => {
   });
   
   describe('custom endpoint', () => {
+    const mockFetch = jest.fn().mockResolvedValue({ ok: true });
+    const originalFetch = global.fetch;
+    const originalSendBeacon = global.navigator.sendBeacon;
+
+    beforeEach(() => {
+      global.fetch = mockFetch;
+      mockFetch.mockClear();
+    });
+
+    afterEach(() => {
+      global.fetch = originalFetch;
+      Object.defineProperty(global.navigator, 'sendBeacon', {
+        value: originalSendBeacon,
+        writable: true,
+      });
+    });
+
     it('sends data to custom endpoint when configured', async () => {
-      const mockFetch = jest.fn().mockResolvedValue({ ok: true });
-      globalAny.fetch = mockFetch;
-      
+      // Initialize with custom endpoint
       initAnalytics({
-        customEndpoint: '/api/analytics'
+        customEndpoint: '/api/analytics',
+        debug: true
       });
       
-      trackEvent('page_view', { test: 'data' });
+      // Track an event
+      const eventData = { test: 'data', category: 'test' };
+      trackEvent('page_view', eventData);
       
+      // Wait for any async operations
       await new Promise(process.nextTick);
       
+      // Verify fetch was called with correct arguments
       expect(mockFetch).toHaveBeenCalledWith(
         '/api/analytics',
         expect.objectContaining({
@@ -220,9 +344,20 @@ describe('Analytics', () => {
           headers: {
             'Content-Type': 'application/json'
           },
-          keepalive: true
+          keepalive: true,
+          body: expect.any(Blob)
         })
       );
+      
+      // Verify the request body contains our event data
+      const requestBody = mockFetch.mock.calls[0][1].body as Blob;
+      const text = await requestBody.text();
+      const parsedBody = JSON.parse(text);
+      
+      expect(parsedBody).toMatchObject({
+        action: 'page_view',
+        ...eventData
+      });
     });
     
     it('uses sendBeacon when available', () => {
@@ -233,31 +368,63 @@ describe('Analytics', () => {
       });
       
       initAnalytics({
-        customEndpoint: '/api/analytics'
+        customEndpoint: '/api/analytics',
+        debug: true
       });
       
-      trackEvent('page_view', { test: 'data' });
+      const eventData = { test: 'beacon', category: 'test' };
+      trackEvent('page_view', eventData);
       
+      // Verify sendBeacon was called with correct arguments
       expect(mockSendBeacon).toHaveBeenCalledWith(
         '/api/analytics',
         expect.any(Blob)
       );
+      
+      // Verify fetch was not used when sendBeacon is available
+      expect(mockFetch).not.toHaveBeenCalled();
     });
   });
   
   describe('Google Tag Manager', () => {
     it('pushes events to dataLayer when GTM is configured', () => {
+      // Initialize with GTM
       initAnalytics({
-        googleTagManagerId: 'GTM-123'
+        googleTagManagerId: 'GTM-123',
+        debug: true
       });
+
+      // Track an event
+      trackEvent('page_view', { test: 'data', category: 'test' });
       
-      trackEvent('page_view', { test: 'data' });
+      // Verify dataLayer was updated
+      expect(mockDataLayer).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          event: 'gtm.js',
+          'gtm.start': expect.any(Number)
+        }),
+        expect.objectContaining({
+          event: 'page_view',
+          test: 'data',
+          category: 'test',
+          timestamp: expect.any(String)
+        })
+      ]));
       
-      expect(mockDataLayer).toContainEqual({
-        event: 'page_view',
-        test: 'data',
-        timestamp: expect.any(String)
-      });
+      // Verify gtm.js was initialized
+      expect(global.document.head.appendChild).toHaveBeenCalled();
+    });
+    
+    it('handles missing dataLayer gracefully', () => {
+      // @ts-ignore - Test missing dataLayer
+      delete global.window.dataLayer;
+      
+      // Should not throw when dataLayer is missing
+      expect(() => {
+        initAnalytics({ googleTagManagerId: 'GTM-123' });
+        trackEvent('test_event', { test: 'data' });
+      }).not.toThrow();
     });
   });
 });
+

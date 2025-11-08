@@ -2,13 +2,14 @@ import React, { useState } from 'react';
 import styled from 'styled-components';
 import { useAuth } from '../contexts/AuthContext';
 import { Container, Section, Heading, Text, Button, Input, Avatar } from '../components/common';
+import toast from '../components/common/Toast';
 import { FiUser, FiMail, FiEdit2, FiSave, FiLock, FiClock, FiPackage } from 'react-icons/fi';
 
 const ProfilePage: React.FC = () => {
   const { user, updateProfile } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
-    name: user?.name || '',
+    name: user?.full_name || '',
     email: user?.email || '',
   });
   const [isLoading, setIsLoading] = useState(false);
@@ -30,12 +31,13 @@ const ProfilePage: React.FC = () => {
     try {
       setIsLoading(true);
       setError(null);
-      await updateProfile(user.id, { name: formData.name });
-      setSuccess('Profile updated successfully!');
-      setTimeout(() => setSuccess(null), 3000);
+      await updateProfile(user.id, { full_name: formData.name });
+      toast.profileUpdated();
       setIsEditing(false);
     } catch (err: any) {
-      setError(err.message || 'Failed to update profile');
+      const errorMessage = err.message || 'Failed to update profile';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -50,7 +52,7 @@ const ProfilePage: React.FC = () => {
       <Section>
         <Container>
           <ProfileHeader>
-            <Avatar size="xl" src={user.avatar} name={user.name} />
+            <Avatar size="xl" src={(user as any).avatar} name={user.full_name || user.email} />
             <div>
               <Heading as="h1" size="2xl">
                 {isEditing ? (
@@ -62,7 +64,7 @@ const ProfilePage: React.FC = () => {
                     fullWidth
                   />
                 ) : (
-                  user.name
+                  user.full_name || user.email
                 )}
               </Heading>
               <Text color="textSecondary">{user.email}</Text>
@@ -97,7 +99,7 @@ const ProfilePage: React.FC = () => {
                       fullWidth
                     />
                   ) : (
-                    <InfoValue>{user.name}</InfoValue>
+                    <InfoValue>{user.full_name || user.email}</InfoValue>
                   )}
                 </InfoItem>
                 <InfoItem>
@@ -107,7 +109,7 @@ const ProfilePage: React.FC = () => {
                 <InfoItem>
                   <InfoLabel>Member Since</InfoLabel>
                   <InfoValue>
-                    {new Date(user.createdAt).toLocaleDateString()}
+                    {(user as any).createdAt ? new Date((user as any).createdAt).toLocaleDateString() : 'N/A'}
                   </InfoValue>
                 </InfoItem>
               </InfoGrid>
@@ -164,7 +166,7 @@ const ProfileSection = styled.div`
   background: ${({ theme }) => theme.colors.background.paper};
   border-radius: ${({ theme }) => theme.radii.lg};
   padding: 2rem;
-  box-shadow: ${({ theme }) => theme.shadows.sm};
+  box-shadow: ${({ theme }) => (theme.shadows as any).sm};
 `;
 
 const SectionHeader = styled.div`
@@ -173,7 +175,7 @@ const SectionHeader = styled.div`
   gap: 0.75rem;
   margin-bottom: 1.5rem;
   padding-bottom: 1rem;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border?.main || theme.colors.common.gray[300]};
   
   h2 {
     font-size: 1.25rem;
@@ -182,7 +184,7 @@ const SectionHeader = styled.div`
   }
   
   svg {
-    color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => theme.colors.primary.main};
   }
 `;
 
@@ -199,7 +201,7 @@ const InfoItem = styled.div`
 
 const InfoLabel = styled.span`
   font-size: 0.875rem;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  color: ${({ theme }) => theme.colors.text?.secondary || theme.colors.common.gray[600]};
 `;
 
 const InfoValue = styled.span`
@@ -216,14 +218,14 @@ const EmptyState = styled.div`
   gap: 1rem;
   
   svg {
-    color: ${({ theme }) => theme.colors.text.secondary};
+    color: ${({ theme }) => theme.colors.text?.secondary || theme.colors.common.gray[600]};
     opacity: 0.5;
   }
 `;
 
 const ErrorMessage = styled.div`
-  background-color: ${({ theme }) => `${theme.colors.error}10`};
-  color: ${({ theme }) => theme.colors.error};
+  background-color: ${({ theme }) => `${(theme.colors as any).error.main}10`};
+  color: ${({ theme }) => (theme.colors as any).error.main};
   padding: 1rem;
   border-radius: ${({ theme }) => theme.radii.md};
   margin-bottom: 1.5rem;
@@ -233,8 +235,8 @@ const ErrorMessage = styled.div`
 `;
 
 const SuccessMessage = styled.div`
-  background-color: ${({ theme }) => `${theme.colors.success}10`};
-  color: ${({ theme }) => theme.colors.success};
+  background-color: ${({ theme }) => `${(theme.colors as any).success.main}10`};
+  color: ${({ theme }) => (theme.colors as any).success.main};
   padding: 1rem;
   border-radius: ${({ theme }) => theme.radii.md};
   margin-bottom: 1.5rem;

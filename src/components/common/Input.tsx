@@ -7,33 +7,33 @@ export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   fullWidth?: boolean;
   startIcon?: ReactNode;
   endIcon?: ReactNode;
+  rightIcon?: ReactNode; // Alias for endIcon for backward compatibility
   icon?: ReactNode;
   iconPosition?: 'start' | 'end';
   containerStyle?: React.CSSProperties;
   containerClassName?: string;
 }
 
-export const Input = forwardRef<HTMLInputElement, InputProps>(
-  (
-    {
-      label,
-      error,
-      fullWidth = false,
-      startIcon,
-      endIcon,
-      icon,
-      iconPosition = 'start',
-      containerStyle,
-      containerClassName,
-      className,
-      id,
-      ...props
-    },
-    ref
-  ) => {
-    // Handle deprecated icon prop (for backward compatibility)
+export const Input = forwardRef<HTMLInputElement, InputProps>(({
+  label,
+  error,
+  fullWidth = false,
+  startIcon,
+  endIcon: endIconProp,
+  rightIcon,
+  icon,
+  iconPosition = 'start',
+  containerStyle,
+  containerClassName,
+  className,
+  id,
+  ...props
+}, ref) => {
+    // Handle icon props (for backward compatibility)
     const resolvedStartIcon = startIcon || (iconPosition === 'start' ? icon : null);
-    const resolvedEndIcon = endIcon || (iconPosition === 'end' ? icon : null);
+    // Use endIcon if provided, otherwise fall back to rightIcon
+    const endIconToUse = endIconProp !== undefined ? endIconProp : rightIcon;
+    const resolvedEndIcon = endIconToUse || (iconPosition === 'end' ? icon : null);
 
     return (
       <InputContainer 
@@ -98,7 +98,7 @@ const InputWrapper = styled.div<{ $hasError: boolean; $hasStartIcon: boolean; $h
     right: 0;
     height: 2px;
     background-color: ${({ theme, $hasError }) => 
-      $hasError ? theme.colors.error.main : theme.colors.primary.main};
+      $hasError ? (theme.colors as any).error.main : theme.colors.primary.main};
     transform: scaleX(0);
     transition: transform 0.2s ease;
   }
@@ -177,7 +177,7 @@ const IconWrapper = styled.div<{ $position: 'start' | 'end' }>`
 `;
 
 const ErrorText = styled.span`
-  color: ${({ theme }) => theme.colors.error.main};
+  color: ${({ theme }) => (theme.colors as any).error.main};
   font-size: 0.75rem;
   margin-top: ${({ theme }) => theme.spacing(0.5)};
   min-height: 1rem;

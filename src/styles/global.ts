@@ -82,6 +82,7 @@ export const GlobalStyles = createGlobalStyle`
 
   /* Typography */
   h1, .h1 {
+    font-family: ${theme.fonts.heading};
     font-size: ${theme.typography.h1.fontSize};
     font-weight: ${theme.typography.h1.fontWeight};
     line-height: ${theme.typography.h1.lineHeight};
@@ -89,6 +90,7 @@ export const GlobalStyles = createGlobalStyle`
   }
 
   h2, .h2 {
+    font-family: ${theme.fonts.heading};
     font-size: ${theme.typography.h2.fontSize};
     font-weight: ${theme.typography.h2.fontWeight};
     line-height: ${theme.typography.h2.lineHeight};
@@ -96,6 +98,7 @@ export const GlobalStyles = createGlobalStyle`
   }
 
   h3, .h3 {
+    font-family: ${theme.fonts.heading};
     font-size: ${theme.typography.h3.fontSize};
     font-weight: ${theme.typography.h3.fontWeight};
     line-height: ${theme.typography.h3.lineHeight};
@@ -103,6 +106,7 @@ export const GlobalStyles = createGlobalStyle`
   }
 
   h4, .h4 {
+    font-family: ${theme.fonts.heading};
     font-size: ${theme.typography.h4.fontSize};
     font-weight: ${theme.typography.h4.fontWeight};
     line-height: ${theme.typography.h4.lineHeight};
@@ -110,6 +114,7 @@ export const GlobalStyles = createGlobalStyle`
   }
 
   h5, .h5 {
+    font-family: ${theme.fonts.heading};
     font-size: ${theme.typography.h5.fontSize};
     font-weight: ${theme.typography.h5.fontWeight};
     line-height: ${theme.typography.h5.lineHeight};
@@ -117,6 +122,7 @@ export const GlobalStyles = createGlobalStyle`
   }
 
   h6, .h6 {
+    font-family: ${theme.fonts.heading};
     font-size: ${theme.typography.h6.fontSize};
     font-weight: ${theme.typography.h6.fontWeight};
     line-height: ${theme.typography.h6.lineHeight};
@@ -124,6 +130,7 @@ export const GlobalStyles = createGlobalStyle`
   }
 
   p {
+    font-family: ${theme.fonts.body};
     margin-bottom: ${theme.spacing(2)};
     line-height: ${theme.typography.body1.lineHeight};
     font-size: ${theme.typography.body1.fontSize};

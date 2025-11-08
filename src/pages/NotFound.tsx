@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import styled from 'styled-components';
 import { Button } from '../components/common/Button';
 
-export const NotFound: React.FC = () => {
+const NotFound: React.FC = () => {
   return (
     <NotFoundContainer>
       <ErrorCode>404</ErrorCode>
@@ -16,6 +16,8 @@ export const NotFound: React.FC = () => {
     </NotFoundContainer>
   );
 };
+
+export default NotFound;
 
 const NotFoundContainer = styled.div`
   display: flex;

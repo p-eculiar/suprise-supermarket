@@ -65,8 +65,9 @@ const StyledHeading = styled.h2<{
 }>`
   margin: 0;
   line-height: 1.2;
+  font-family: ${({ theme }) => theme.fonts.heading};
   text-align: ${({ $align }) => $align};
-  color: ${({ theme, $color }) => $color || theme.colors.text.primary};
+  color: ${({ theme, $color }) => $color || theme.colors.text?.primary || theme.colors.secondary.main};
   margin-top: ${({ $mt }) => $mt ? `${$mt * 0.5}rem` : '0'};
   margin-bottom: ${({ $mb }) => $mb ? `${$mb * 0.5}rem` : '0'};
   margin-left: ${({ $mx }) => $mx || 'auto'};

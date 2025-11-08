@@ -1,733 +1,920 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import styled from 'styled-components';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useQuery } from 'react-query';
-import { Card, CardMedia, CardContent, CardTitle, CardSubtitle, CardActions } from '../components/common/Card';
-import { Button } from '../components/common/Button';
-import { Select } from '../components/common/Select';
-import { Checkbox } from '../components/common/Checkbox';
-import { Input } from '../components/common/Input';
-import { fetchProducts } from '../services/api';
-import { Product, ProductCategory } from '../types';
-import { FiShoppingCart, FiHeart, FiFilter, FiX, FiSearch } from 'react-icons/fi';
+import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
+import { productService, Product } from '../services/productService';
+import { FiShoppingCart, FiHeart } from 'react-icons/fi';
+import { FaTruck, FaCreditCard, FaHeadset } from 'react-icons/fa';
+import { useCart } from '../contexts/CartContext';
+import { useWishlist } from '../contexts/WishlistContext';
+import toast from '../components/common/Toast';
 
-// Mock categories - replace with actual data from your API
-const categories: ProductCategory[] = [
-  { id: '1', name: 'Fresh Produce', slug: 'fresh-produce' },
-  { id: '2', name: 'Dairy & Eggs', slug: 'dairy-eggs' },
-  { id: '3', name: 'Meat & Seafood', slug: 'meat-seafood' },
-  { id: '4', name: 'Bakery', slug: 'bakery' },
-  { id: '5', name: 'Beverages', slug: 'beverages' },
-  { id: '6', name: 'Snacks', slug: 'snacks' },
+// Mock categories
+const categories = [
+  { id: '1', name: 'Vegetables', slug: 'vegetables', count: 165 },
+  { id: '2', name: 'Fresh Fruit', slug: 'fresh-fruit', count: 137 },
+  { id: '3', name: 'Milk & Dairy', slug: 'milk-dairy', count: 34 },
+  { id: '4', name: 'Meat & Fish', slug: 'meat-fish', count: 56 },
+  { id: '5', name: 'Dry Fruits', slug: 'dry-fruits', count: 78 },
+  { id: '6', name: 'Juice', slug: 'juice', count: 89 },
+];
+
+const ratingFilters = [
+  { stars: 5, count: 78 },
+  { stars: 4, count: 105 },
+  { stars: 3, count: 42 },
+  { stars: 2, count: 18 },
+  { stars: 1, count: 9 },
+];
+
+const brands = ['NestFood', 'Stouffer', 'Tyson', 'Farmfood', 'StoreBrand'];
+const productTypes = ['All Products', 'Fruits Products', 'Fresh Vegetable'];
+
+// Mock product data
+const mockProducts = [
+  { id: '1', name: 'Fresh Oranges', categoryName: 'Fruits', price: 11.75, originalPrice: 13.50, rating: 5.0, reviewCount: 92, imageUrl: 'https://images.unsplash.com/photo-1582979512210-99b6a53386f9?w=400', stock: 10, isSale: true, salePercentage: 25 },
+  { id: '2', name: 'Vegetables', categoryName: 'Vegetables', price: 8.5, originalPrice: 10.00, rating: 5.0, reviewCount: 48, imageUrl: 'https://images.unsplash.com/photo-1597362925123-77861d3fbac7?w=400', stock: 15, isSale: true, salePercentage: 25 },
+  { id: '3', name: 'Fresh Pomegranate', categoryName: 'Fruits', price: 12, originalPrice: 15, rating: 5.0, reviewCount: 65, imageUrl: 'https://images.unsplash.com/photo-1615485500834-bc10199bc6dd?w=400', stock: 8, isSale: true, salePercentage: 25 },
+  { id: '4', name: 'Banana', categoryName: 'Fruits', price: 14, originalPrice: 16, rating: 5.0, reviewCount: 120, imageUrl: 'https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=400', stock: 20, isSale: true, salePercentage: 25 },
+  { id: '5', name: 'Box of Chocolates', categoryName: 'Snacks', price: 24.60, originalPrice: 28.00, rating: 5.0, reviewCount: 89, imageUrl: 'https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=400', stock: 12, isSale: true, salePercentage: 25 },
+  { id: '6', name: 'Fresh Cabbage', categoryName: 'Vegetables', price: 8, originalPrice: 10, rating: 4.5, reviewCount: 56, imageUrl: 'https://images.unsplash.com/photo-1594282319062-e709c8b0ed52?w=400', stock: 18, isSale: true, salePercentage: 25 },
+  { id: '7', name: 'Fresh Pineapple', categoryName: 'Fruits', price: 15.00, originalPrice: 20.00, rating: 5.0, reviewCount: 73, imageUrl: 'https://images.unsplash.com/photo-1550828486-856334bc2f7e?w=400', stock: 7, isSale: true, salePercentage: 25 },
+  { id: '8', name: 'Fruit Jam Jar', categoryName: 'Jams', price: 7.50, originalPrice: 10.50, rating: 5.0, reviewCount: 41, imageUrl: 'https://images.unsplash.com/photo-1598512861583-8c3696f34610?w=400', stock: 25, isSale: true, salePercentage: 25 },
+  { id: '9', name: 'Fresh Green Apple', categoryName: 'Fruits', price: 20.00, originalPrice: 25.00, rating: 4.0, reviewCount: 98, imageUrl: 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=400', stock: 14, isSale: true, salePercentage: 25 },
 ];
 
 const Products: React.FC = () => {
-  const [searchQuery, setSearchQuery] = useState('');
+  const navigate = useNavigate();
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [sortBy, setSortBy] = useState('featured');
-  const [priceRange, setPriceRange] = useState<[number, number]>([0, 500]);
-  const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const [selectedRatings, setSelectedRatings] = useState<number[]>([]);
+  const [priceRange, setPriceRange] = useState<[number, number]>([10, 100]);
+  const [sortBy, setSortBy] = useState('default');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 9;
 
-  // Fetch products
-  const { data: products = [], isLoading, error } = useQuery<Product[]>('products', fetchProducts);
+  const { addToCart } = useCart();
+  const { addToWishlist, isInWishlist } = useWishlist();
 
-  // Filter and sort products
-  const filteredProducts = useMemo(() => {
-    let result = [...products];
+  // State for products from database
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [totalCount, setTotalCount] = useState(0);
 
-    // Filter by search query
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      result = result.filter(
-        (product) =>
-          product.name.toLowerCase().includes(query) ||
-          product.description.toLowerCase().includes(query)
-      );
+  // Load products from database
+  useEffect(() => {
+    loadProducts();
+  }, [selectedCategories, priceRange, sortBy, currentPage]);
+
+  const loadProducts = async () => {
+    try {
+      setLoading(true);
+      
+      // Build filters
+      const filters: any = {};
+      if (selectedCategories.length > 0) {
+        filters.category = selectedCategories[0]; // Use first selected category
+      }
+      if (priceRange) {
+        filters.minPrice = priceRange[0];
+        filters.maxPrice = priceRange[1];
+      }
+      
+      // Fetch products
+      const allProducts = await productService.getAllProducts(filters);
+      
+      // Apply sorting
+      let sortedProducts = [...allProducts];
+      if (sortBy === 'price-low') {
+        sortedProducts.sort((a, b) => a.price - b.price);
+      } else if (sortBy === 'price-high') {
+        sortedProducts.sort((a, b) => b.price - a.price);
+      } else if (sortBy === 'name') {
+        sortedProducts.sort((a, b) => a.name.localeCompare(b.name));
+      }
+      
+      // Apply pagination
+      const startIndex = (currentPage - 1) * itemsPerPage;
+      const endIndex = startIndex + itemsPerPage;
+      const paginatedProducts = sortedProducts.slice(startIndex, endIndex);
+      
+      setProducts(paginatedProducts);
+      setTotalCount(sortedProducts.length);
+    } catch (error) {
+      console.error('Error loading products:', error);
+      toast.error('Failed to load products');
+    } finally {
+      setLoading(false);
     }
-
-    // Filter by categories
-    if (selectedCategories.length > 0) {
-      result = result.filter((product) =>
-        selectedCategories.includes(product.categoryId)
-      );
-    }
-
-    // Filter by price range
-    result = result.filter(
-      (product) => product.price >= priceRange[0] && product.price <= priceRange[1]
-    );
-
-    // Sort products
-    switch (sortBy) {
-      case 'price-low':
-        return result.sort((a, b) => a.price - b.price);
-      case 'price-high':
-        return result.sort((a, b) => b.price - a.price);
-      case 'name-asc':
-        return result.sort((a, b) => a.name.localeCompare(b.name));
-      case 'name-desc':
-        return result.sort((a, b) => b.name.localeCompare(a.name));
-      case 'featured':
-      default:
-        return result.sort((a, b) => (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0));
-    }
-  }, [products, searchQuery, selectedCategories, sortBy, priceRange]);
-
-  const toggleCategory = (categoryId: string) => {
-    setSelectedCategories((prev) =>
-      prev.includes(categoryId)
-        ? prev.filter((id) => id !== categoryId)
-        : [...prev, categoryId]
-    );
   };
 
-  const handlePriceRangeChange = (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
-    const value = Number(e.target.value);
-    setPriceRange((prev) => {
-      const newRange = [...prev] as [number, number];
-      newRange[index] = value;
-      return newRange;
+  const handleAddToCart = (product: any) => {
+    addToCart({
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      originalPrice: product.originalPrice,
+      imageUrl: product.imageUrl,
+      categoryName: product.categoryName,
+      stock: product.stock,
     });
   };
 
-  if (isLoading) {
-    return <LoadingSpinner>Loading products...</LoadingSpinner>;
-  }
+  const handleToggleWishlist = (product: any) => {
+    addToWishlist({
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      originalPrice: product.originalPrice,
+      imageUrl: product.imageUrl,
+      categoryName: product.categoryName,
+      stock: product.stock,
+    });
+  };
 
-  if (error) {
-    return <ErrorMessage>Error loading products. Please try again later.</ErrorMessage>;
-  }
+  // Pagination - calculated from API count
+  const totalPages = Math.ceil(totalCount / itemsPerPage);
+  const paginatedProducts = products;
+
+  const toggleCategory = (categoryName: string) => {
+    setSelectedCategories((prev) =>
+      prev.includes(categoryName)
+        ? prev.filter((name) => name !== categoryName)
+        : [...prev, categoryName]
+    );
+    setCurrentPage(1); // Reset to first page when filters change
+  };
 
   return (
-    <ProductsContainer>
-      <PageHeader>
-        <h1>Our Products</h1>
-        <p>Discover our wide range of high-quality products at the best prices</p>
-      </PageHeader>
+    <PageWrapper>
+      {/* Breadcrumb & Page Header */}
+      <BreadcrumbSection>
+        <ContentContainer>
+          <PageTitle>Shop</PageTitle>
+          <Breadcrumb>
+            <BreadcrumbLink href="/">Home</BreadcrumbLink>
+            <BreadcrumbSeparator>/</BreadcrumbSeparator>
+            <BreadcrumbCurrent>Shop</BreadcrumbCurrent>
+          </Breadcrumb>
+        </ContentContainer>
+      </BreadcrumbSection>
 
-      <ProductsLayout>
-        {/* Mobile Filter Toggle */}
-        <MobileFilterButton
-          variant="outline"
-          onClick={() => setShowMobileFilters(!showMobileFilters)}
-        >
-          <FiFilter /> {showMobileFilters ? 'Hide Filters' : 'Show Filters'}
-        </MobileFilterButton>
+      <ContentContainer>
+        <ShopLayout>
+          {/* Sidebar Filters */}
+          <Sidebar>
+            <FilterSection>
+              <FilterTitle>Filter Options</FilterTitle>
+            </FilterSection>
 
-        {/* Sidebar - Filters */}
-        <FiltersContainer $isOpen={showMobileFilters}>
-          <FilterHeader>
-            <h3>Filters</h3>
-            <CloseButton onClick={() => setShowMobileFilters(false)}>
-              <FiX />
-            </CloseButton>
-          </FilterHeader>
-
-          <FilterSection>
-            <FilterTitle>Search</FilterTitle>
-            <SearchContainer>
-              <Input
-                type="text"
-                placeholder="Search products..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                icon={<FiSearch />}
-              />
-            </SearchContainer>
-          </FilterSection>
-
-          <FilterSection>
-            <FilterTitle>Categories</FilterTitle>
-            <CategoryList>
+            {/* Category Filter */}
+            <FilterSection>
+              <FilterSubtitle>Category</FilterSubtitle>
               {categories.map((category) => (
-                <CategoryItem key={category.id}>
-                  <Checkbox
-                    id={`category-${category.id}`}
-                    label={category.name}
-                    checked={selectedCategories.includes(category.id)}
-                    onChange={() => toggleCategory(category.id)}
+                <FilterCheckbox key={category.id}>
+                  <input
+                    type="checkbox"
+                    id={`cat-${category.id}`}
+                    checked={selectedCategories.includes(category.name)}
+                    onChange={() => toggleCategory(category.name)}
                   />
-                </CategoryItem>
+                  <label htmlFor={`cat-${category.id}`}>
+                    {category.name}
+                    <span>({category.count})</span>
+                  </label>
+                </FilterCheckbox>
               ))}
-            </CategoryList>
-          </FilterSection>
+            </FilterSection>
 
-          <FilterSection>
-            <FilterTitle>Price Range</FilterTitle>
-            <PriceRangeContainer>
-              <PriceInput>
-                <span>$</span>
-                <input
-                  type="number"
+            {/* Price Range Filter */}
+            <FilterSection>
+              <FilterSubtitle>Price</FilterSubtitle>
+              <PriceRangeInputs>
+                <PriceInput>
+                  <span>$</span>
+                  <input
+                    type="number"
+                    value={priceRange[0]}
+                    onChange={(e) => setPriceRange([Number(e.target.value), priceRange[1]])}
+                  />
+                </PriceInput>
+                <span>-</span>
+                <PriceInput>
+                  <span>$</span>
+                  <input
+                    type="number"
+                    value={priceRange[1]}
+                    onChange={(e) => setPriceRange([priceRange[0], Number(e.target.value)])}
+                  />
+                </PriceInput>
+              </PriceRangeInputs>
+              <PriceSliderContainer>
+                <PriceSlider
+                  type="range"
                   min="0"
-                  max={priceRange[1]}
-                  value={priceRange[0]}
-                  onChange={(e) => handlePriceRangeChange(e, 0)}
-                />
-              </PriceInput>
-              <PriceRangeDivider>to</PriceRangeDivider>
-              <PriceInput>
-                <span>$</span>
-                <input
-                  type="number"
-                  min={priceRange[0]}
-                  max="1000"
+                  max="150"
                   value={priceRange[1]}
-                  onChange={(e) => handlePriceRangeChange(e, 1)}
+                  onChange={(e) => setPriceRange([priceRange[0], Number(e.target.value)])}
                 />
-              </PriceInput>
-            </PriceRangeContainer>
-            <PriceRangeSlider>
-              <input
-                type="range"
-                min="0"
-                max="1000"
-                step="10"
-                value={priceRange[0]}
-                onChange={(e) => handlePriceRangeChange(e, 0)}
-              />
-              <input
-                type="range"
-                min="0"
-                max="1000"
-                step="10"
-                value={priceRange[1]}
-                onChange={(e) => handlePriceRangeChange(e, 1)}
-              />
-            </PriceRangeSlider>
-          </FilterSection>
+              </PriceSliderContainer>
+            </FilterSection>
 
-          <ClearFiltersButton
-            variant="text"
-            onClick={() => {
-              setSelectedCategories([]);
-              setPriceRange([0, 500]);
-              setSearchQuery('');
-            }}
-          >
-            Clear All Filters
-          </ClearFiltersButton>
-        </FiltersContainer>
+            {/* Rating Filter */}
+            <FilterSection>
+              <FilterSubtitle>Rating</FilterSubtitle>
+              {ratingFilters.map((filter) => (
+                <FilterCheckbox key={filter.stars}>
+                  <input
+                    type="checkbox"
+                    id={`rating-${filter.stars}`}
+                  />
+                  <label htmlFor={`rating-${filter.stars}`}>
+                    <Stars>
+                      {[...Array(5)].map((_, i) => (
+                        <Star key={i} $filled={i < filter.stars}>★</Star>
+                      ))}
+                    </Stars>
+                    <span>({filter.count})</span>
+                  </label>
+                </FilterCheckbox>
+              ))}
+            </FilterSection>
 
-        {/* Main Content */}
-        <ProductsContent>
-          <ProductsHeader>
-            <ResultsCount>{filteredProducts.length} products found</ResultsCount>
-            <SortContainer>
-              <span>Sort by:</span>
-              <Select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                options={[
-                  { value: 'featured', label: 'Featured' },
-                  { value: 'price-low', label: 'Price: Low to High' },
-                  { value: 'price-high', label: 'Price: High to Low' },
-                  { value: 'name-asc', label: 'Name: A to Z' },
-                  { value: 'name-desc', label: 'Name: Z to A' },
-                ]}
-              />
-            </SortContainer>
-          </ProductsHeader>
+            {/* Brand Filter */}
+            <FilterSection>
+              <FilterSubtitle>Brand</FilterSubtitle>
+              {brands.map((brand) => (
+                <FilterCheckbox key={brand}>
+                  <input type="checkbox" id={`brand-${brand}`} />
+                  <label htmlFor={`brand-${brand}`}>{brand}</label>
+                </FilterCheckbox>
+              ))}
+            </FilterSection>
 
-          <ProductsGrid>
-            <AnimatePresence>
-              {filteredProducts.map((product) => (
-                <motion.div
+            {/* Product Type Filter */}
+            <FilterSection>
+              <FilterSubtitle>Product Type</FilterSubtitle>
+              {productTypes.map((type) => (
+                <FilterCheckbox key={type}>
+                  <input type="checkbox" id={`type-${type}`} />
+                  <label htmlFor={`type-${type}`}>{type}</label>
+                </FilterCheckbox>
+              ))}
+            </FilterSection>
+
+            {/* Availability Filter */}
+            <FilterSection>
+              <FilterSubtitle>Availability</FilterSubtitle>
+              <FilterCheckbox>
+                <input type="checkbox" id="in-stock" />
+                <label htmlFor="in-stock">In Stock</label>
+              </FilterCheckbox>
+              <FilterCheckbox>
+                <input type="checkbox" id="out-of-stock" />
+                <label htmlFor="out-of-stock">Out of Stock</label>
+              </FilterCheckbox>
+            </FilterSection>
+          </Sidebar>
+
+          {/* Main Content */}
+          <MainContent>
+            {/* Header with Sort */}
+            <ProductsHeader>
+              <ResultsText>
+                {loading ? 'Loading...' : `Showing ${((currentPage - 1) * itemsPerPage) + 1}-${Math.min(currentPage * itemsPerPage, totalCount)} of ${totalCount} results`}
+              </ResultsText>
+              <SortContainer>
+                <span>Sort by:</span>
+                <SortSelect value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+                  <option value="default">Default Sorting</option>
+                  <option value="price-low">Price: Low to High</option>
+                  <option value="price-high">Price: High to Low</option>
+                </SortSelect>
+              </SortContainer>
+            </ProductsHeader>
+
+            {/* Products Grid */}
+            <ProductsGrid>
+              {paginatedProducts.map((product: any) => (
+                <ProductCard
                   key={product.id}
+                  as={motion.div}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  layout
+                  whileHover={{ y: -5 }}
                 >
-                  <ProductCard variant="elevated" hoverEffect="elevate">
-                    <ProductBadge $type={product.stock > 0 ? 'in-stock' : 'out-of-stock'}>
-                      {product.stock > 0 ? 'In Stock' : 'Out of Stock'}
-                    </ProductBadge>
-                    {product.isOnSale && (
-                      <SaleBadge>Sale</SaleBadge>
-                    )}
-                    <CardMedia $height="200px">
-                      <img src={product.imageUrl} alt={product.name} />
-                      <ProductActions>
-                        <IconButton aria-label="Add to wishlist">
-                          <FiHeart />
-                        </IconButton>
-                        <IconButton aria-label="Quick view">
-                          <FiSearch />
-                        </IconButton>
-                      </ProductActions>
-                    </CardMedia>
-                    <CardContent>
-                      <ProductCategoryName>{product.categoryName}</ProductCategoryName>
-                      <CardTitle>{product.name}</CardTitle>
-                      <CardSubtitle>{product.shortDescription}</CardSubtitle>
-                      <ProductPrice>
-                        {product.originalPrice > product.price ? (
-                          <>
-                            <CurrentPrice>${product.price.toFixed(2)}</CurrentPrice>
-                            <OriginalPrice>${product.originalPrice.toFixed(2)}</OriginalPrice>
-                          </>
-                        ) : (
-                          <CurrentPrice>${product.price.toFixed(2)}</CurrentPrice>
-                        )}
-                      </ProductPrice>
-                      <Rating>
+                  {product.isSale && <SaleBadge>-{product.salePercentage}% OFF</SaleBadge>}
+                  <ProductImageWrapper onClick={() => navigate(`/products/${product.id}`)}>
+                    <ProductImage src={product.imageUrl} alt={product.name} />
+                    <WishlistButton 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleWishlist(product);
+                      }}
+                      $active={isInWishlist(product.id)}
+                    >
+                      <FiHeart />
+                    </WishlistButton>
+                  </ProductImageWrapper>
+                  <ProductInfo>
+                    <ProductCategory>{product.categoryName}</ProductCategory>
+                    <ProductRating>
+                      <Stars>
                         {[...Array(5)].map((_, i) => (
-                          <Star key={i} $filled={i < Math.floor(product.rating)} />
+                          <Star key={i} $filled={i < Math.floor(product.rating)}>★</Star>
                         ))}
-                        <span>({product.reviewCount})</span>
-                      </Rating>
-                    </CardContent>
-                    <CardActions>
-                      <Button
-                        variant="primary"
-                        fullWidth
-                        icon={<FiShoppingCart />}
-                        disabled={product.stock === 0}
-                      >
-                        {product.stock > 0 ? 'Add to Cart' : 'Out of Stock'}
-                      </Button>
-                    </CardActions>
-                  </ProductCard>
-                </motion.div>
+                      </Stars>
+                      <RatingValue>{product.rating.toFixed(1)}</RatingValue>
+                    </ProductRating>
+                    <ProductName onClick={() => navigate(`/products/${product.id}`)}>{product.name}</ProductName>
+                    <ProductPriceRow>
+                      <ProductPrice>${product.price.toFixed(2)}</ProductPrice>
+                      {product.originalPrice > product.price && (
+                        <OriginalPrice>${product.originalPrice.toFixed(2)}</OriginalPrice>
+                      )}
+                    </ProductPriceRow>
+                    <AddToCartButton onClick={(e) => {
+                      e.stopPropagation();
+                      handleAddToCart(product);
+                    }}>
+                      <FiShoppingCart />
+                      Add to Cart
+                    </AddToCartButton>
+                  </ProductInfo>
+                </ProductCard>
               ))}
-            </AnimatePresence>
-          </ProductsGrid>
+            </ProductsGrid>
 
-          {filteredProducts.length === 0 && (
-            <NoResults>
-              <h3>No products found</h3>
-              <p>Try adjusting your search or filter criteria</p>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setSelectedCategories([]);
-                  setPriceRange([0, 500]);
-                  setSearchQuery('');
-                }}
+            {/* Pagination */}
+            <Pagination>
+              <PaginationButton 
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(currentPage - 1)}
               >
-                Clear All Filters
-              </Button>
-            </NoResults>
-          )}
-        </ProductsContent>
-      </ProductsLayout>
-    </ProductsContainer>
+                «
+              </PaginationButton>
+              {[...Array(totalPages)].map((_, i) => (
+                <PaginationButton
+                  key={i + 1}
+                  $active={currentPage === i + 1}
+                  onClick={() => setCurrentPage(i + 1)}
+                >
+                  {i + 1}
+                </PaginationButton>
+              ))}
+              <PaginationButton 
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage(currentPage + 1)}
+              >
+                »
+              </PaginationButton>
+            </Pagination>
+          </MainContent>
+        </ShopLayout>
+
+        {/* Service Features */}
+        <ServicesSection>
+          <ServiceCard>
+            <ServiceIcon>
+              <FaTruck />
+            </ServiceIcon>
+            <ServiceContent>
+              <ServiceTitle>Free Shipping</ServiceTitle>
+              <ServiceText>Free shipping on all orders over $50</ServiceText>
+            </ServiceContent>
+          </ServiceCard>
+          <ServiceCard>
+            <ServiceIcon>
+              <FaCreditCard />
+            </ServiceIcon>
+            <ServiceContent>
+              <ServiceTitle>Flexible Payment</ServiceTitle>
+              <ServiceText>Pay with multiple credit cards</ServiceText>
+            </ServiceContent>
+          </ServiceCard>
+          <ServiceCard>
+            <ServiceIcon>
+              <FaHeadset />
+            </ServiceIcon>
+            <ServiceContent>
+              <ServiceTitle>24/7 Support</ServiceTitle>
+              <ServiceText>We support online 24 hours a day</ServiceText>
+            </ServiceContent>
+          </ServiceCard>
+        </ServicesSection>
+      </ContentContainer>
+    </PageWrapper>
   );
 };
 
 export default Products;
 
 // Styled Components
-const ProductsContainer = styled.div`
-  padding: ${({ theme }) => theme.spacing(4, 2)};
-  max-width: 1440px;
+const PageWrapper = styled.div`
+  background: #F8F9FA;
+  min-height: 100vh;
+  padding-bottom: 3rem;
+`;
+
+const BreadcrumbSection = styled.div`
+  background: white;
+  padding: 2rem 0;
+  margin-bottom: 2rem;
+`;
+
+const ContentContainer = styled.div`
+  max-width: 1400px;
   margin: 0 auto;
+  padding: 0 2rem;
 `;
 
-const PageHeader = styled.div`
-  text-align: center;
-  margin-bottom: ${({ theme }) => theme.spacing(6)};
+const PageTitle = styled.h1`
+  font-size: 2rem;
+  color: #2D3436;
+  margin-bottom: 0.5rem;
+`;
+
+const Breadcrumb = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+`;
+
+const BreadcrumbLink = styled.a`
+  color: #6C9A7F;
+  text-decoration: none;
   
-  h1 {
-    font-size: 2.5rem;
-    color: ${({ theme }) => theme.colors.primary.main};
-    margin-bottom: ${({ theme }) => theme.spacing(2)};
-  }
-  
-  p {
-    color: ${({ theme }) => theme.colors.common.gray[600]};
-    font-size: 1.1rem;
+  &:hover {
+    text-decoration: underline;
   }
 `;
 
-const ProductsLayout = styled.div`
+const BreadcrumbSeparator = styled.span`
+  color: #636E72;
+`;
+
+const BreadcrumbCurrent = styled.span`
+  color: #636E72;
+`;
+
+const ShopLayout = styled.div`
   display: grid;
   grid-template-columns: 280px 1fr;
-  gap: ${({ theme }) => theme.spacing(4)};
-  position: relative;
+  gap: 3rem;
+  margin-bottom: 3rem;
   
-  @media (max-width: 960px) {
+  @media (max-width: 1024px) {
     grid-template-columns: 1fr;
   }
 `;
 
-const FiltersContainer = styled.div<{ $isOpen: boolean }>`
-  background: ${({ theme }) => theme.colors.background.paper};
-  border-radius: ${({ theme }) => theme.shape.borderRadius}px;
-  padding: ${({ theme }) => theme.spacing(3)};
+const Sidebar = styled.div`
+  background: white;
+  padding: 1.5rem;
+  border-radius: 12px;
   height: fit-content;
-  box-shadow: ${({ theme }) => theme.shadows[1]};
   position: sticky;
   top: 100px;
   
-  @media (max-width: 960px) {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 1000;
-    overflow-y: auto;
-    transform: ${({ $isOpen }) => ($isOpen ? 'translateX(0)' : 'translateX(-100%)')};
-    transition: transform 0.3s ease-in-out;
-    max-width: 400px;
-    width: 90%;
-  }
-`;
-
-const FilterHeader = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: ${({ theme }) => theme.spacing(3)};
-  
-  h3 {
-    font-size: 1.25rem;
-    margin: 0;
-    color: ${({ theme }) => theme.colors.secondary.main};
-  }
-`;
-
-const CloseButton = styled.button`
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  cursor: pointer;
-  color: ${({ theme }) => theme.colors.common.gray[600]};
-  display: none;
-  
-  @media (max-width: 960px) {
-    display: block;
+  @media (max-width: 1024px) {
+    display: none;
   }
 `;
 
 const FilterSection = styled.div`
-  margin-bottom: ${({ theme }) => theme.spacing(4)};
+  margin-bottom: 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid #E1E8ED;
+  
+  &:last-child {
+    border-bottom: none;
+  }
 `;
 
-const FilterTitle = styled.h4`
+const FilterTitle = styled.h3`
   font-size: 1rem;
-  margin: 0 0 ${({ theme }) => theme.spacing(2)} 0;
-  color: ${({ theme }) => theme.colors.common.gray[800]};
-  font-weight: 600;
+  font-weight: 700;
+  color: #2D3436;
+  margin-bottom: 1rem;
 `;
 
-const CategoryList = styled.ul`
-  list-style: none;
-  padding: 0;
-  margin: 0;
+const FilterSubtitle = styled.h4`
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #2D3436;
+  margin-bottom: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 `;
 
-const CategoryItem = styled.li`
-  margin-bottom: ${({ theme }) => theme.spacing(1)};
-`;
-
-const PriceRangeContainer = styled.div`
+const FilterCheckbox = styled.div`
   display: flex;
   align-items: center;
-  gap: ${({ theme }) => theme.spacing(2)};
-  margin-bottom: ${({ theme }) => theme.spacing(2)};
+  margin-bottom: 0.75rem;
+  
+  input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    margin-right: 0.75rem;
+    cursor: pointer;
+    accent-color: #6C9A7F;
+  }
+  
+  label {
+    font-size: 0.875rem;
+    color: #636E72;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+    
+    span {
+      color: #999;
+      font-size: 0.8rem;
+    }
+  }
+`;
+
+const PriceRangeInputs = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
 `;
 
 const PriceInput = styled.div`
   display: flex;
   align-items: center;
-  border: 1px solid ${({ theme }) => theme.colors.common.gray[300]};
-  border-radius: 4px;
-  padding: ${({ theme }) => theme.spacing(0.5, 1)};
+  border: 1px solid #E1E8ED;
+  border-radius: 6px;
+  padding: 0.5rem;
+  flex: 1;
   
   span {
-    color: ${({ theme }) => theme.colors.common.gray[600]};
-    margin-right: 4px;
+    margin-right: 0.25rem;
+    color: #636E72;
   }
   
   input {
     border: none;
-    width: 60px;
-    outline: none;
-    color: ${({ theme }) => theme.colors.common.gray[800]};
-    
-    &::-webkit-outer-spin-button,
-    &::-webkit-inner-spin-button {
-      -webkit-appearance: none;
-      margin: 0;
-    }
-    
-    &[type=number] {
-      -moz-appearance: textfield;
-    }
-  }
-`;
-
-const PriceRangeDivider = styled.span`
-  color: ${({ theme }) => theme.colors.common.gray[500]};
-`;
-
-const PriceRangeSlider = styled.div`
-  position: relative;
-  height: 4px;
-  background-color: ${({ theme }) => theme.colors.common.gray[200]};
-  border-radius: 2px;
-  margin: ${({ theme }) => theme.spacing(3, 0)};
-  
-  input[type="range"] {
-    position: absolute;
     width: 100%;
-    height: 4px;
-    background: none;
-    pointer-events: none;
-    -webkit-appearance: none;
-    
-    &::-webkit-slider-thumb {
-      pointer-events: auto;
-      -webkit-appearance: none;
-      width: 16px;
-      height: 16px;
-      border-radius: 50%;
-      background: ${({ theme }) => theme.colors.primary.main};
-      cursor: pointer;
-      margin-top: -6px;
-    }
-    
-    &::-moz-range-thumb {
-      pointer-events: auto;
-      width: 16px;
-      height: 16px;
-      border-radius: 50%;
-      background: ${({ theme }) => theme.colors.primary.main};
-      cursor: pointer;
-      border: none;
-    }
+    outline: none;
+    font-size: 0.875rem;
+    color: #2D3436;
   }
 `;
 
-const ClearFiltersButton = styled(Button)`
-  width: 100%;
-  margin-top: ${({ theme }) => theme.spacing(2)};
+const PriceSliderContainer = styled.div`
+  padding: 0.5rem 0;
 `;
 
-const ProductsContent = styled.div`
-  flex: 1;
+const PriceSlider = styled.input`
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: #E1E8ED;
+  outline: none;
+  -webkit-appearance: none;
+  
+  &::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #6C9A7F;
+    cursor: pointer;
+  }
+  
+  &::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #6C9A7F;
+    cursor: pointer;
+    border: none;
+  }
+`;
+
+const Stars = styled.div`
+  display: flex;
+  gap: 2px;
+`;
+
+const Star = styled.span<{ $filled: boolean }>`
+  color: ${props => props.$filled ? '#FFB946' : '#E1E8ED'};
+  font-size: 0.875rem;
+`;
+
+const MainContent = styled.div`
+  background: white;
+  padding: 2rem;
+  border-radius: 12px;
 `;
 
 const ProductsHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: ${({ theme }) => theme.spacing(3)};
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #E1E8ED;
   
-  @media (max-width: 600px) {
+  @media (max-width: 768px) {
     flex-direction: column;
     align-items: flex-start;
-    gap: ${({ theme }) => theme.spacing(2)};
+    gap: 1rem;
   }
 `;
 
-const ResultsCount = styled.p`
-  margin: 0;
-  color: ${({ theme }) => theme.colors.common.gray[600]};
+const ResultsText = styled.div`
+  font-size: 0.875rem;
+  color: #636E72;
 `;
 
 const SortContainer = styled.div`
   display: flex;
   align-items: center;
-  gap: ${({ theme }) => theme.spacing(2)};
+  gap: 0.75rem;
   
   span {
-    color: ${({ theme }) => theme.colors.common.gray[700]};
-    font-size: 0.9rem;
+    font-size: 0.875rem;
+    color: #636E72;
+  }
+`;
+
+const SortSelect = styled.select`
+  padding: 0.5rem 1rem;
+  border: 1px solid #E1E8ED;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  color: #2D3436;
+  background: white;
+  cursor: pointer;
+  outline: none;
+  
+  &:focus {
+    border-color: #6C9A7F;
   }
 `;
 
 const ProductsGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: ${({ theme }) => theme.spacing(3)};
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2rem;
+  margin-bottom: 3rem;
   
-  @media (max-width: 600px) {
+  @media (max-width: 1200px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  @media (max-width: 768px) {
     grid-template-columns: 1fr;
   }
 `;
 
-const ProductCard = styled(Card)`
+const ProductCard = styled.div`
+  background: white;
+  border: 1px solid #E1E8ED;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.3s ease;
   position: relative;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
   
   &:hover {
-    transform: translateY(-5px);
-    box-shadow: ${({ theme }) => theme.shadows[4]};
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
   }
 `;
 
-const ProductBadge = styled.span<{ $type: 'in-stock' | 'out-of-stock' }>`
+const SaleBadge = styled.div`
   position: absolute;
-  top: 10px;
-  left: 10px;
-  background-color: ${({ theme, $type }) => 
-    $type === 'in-stock' ? theme.colors.success.main : theme.colors.error.main};
+  top: 1rem;
+  left: 1rem;
+  background: #6C9A7F;
   color: white;
-  font-size: 0.75rem;
-  padding: ${({ theme }) => theme.spacing(0.5, 1)};
-  border-radius: 12px;
-  z-index: 1;
-`;
-
-const SaleBadge = styled.span`
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  background-color: ${({ theme }) => theme.colors.error.main};
-  color: white;
+  padding: 0.375rem 0.75rem;
+  border-radius: 6px;
   font-size: 0.75rem;
   font-weight: 600;
-  padding: ${({ theme }) => theme.spacing(0.5, 1)};
-  border-radius: 12px;
-  z-index: 1;
+  z-index: 2;
 `;
 
-const ProductActions = styled.div`
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  opacity: 0;
-  transition: opacity 0.3s ease;
+const ProductImageWrapper = styled.div`
+  position: relative;
+  width: 100%;
+  height: 250px;
+  cursor: pointer;
+  background: #F8F9FA;
+  overflow: hidden;
+`;
+
+const ProductImage = styled.img`
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
   
   ${ProductCard}:hover & {
-    opacity: 1;
+    transform: scale(1.05);
   }
 `;
 
-const IconButton = styled.button`
+const WishlistButton = styled.button<{ $active?: boolean }>`
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: white;
+  background: ${props => props.$active ? '#6C9A7F' : 'white'};
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  color: ${({ theme }) => theme.colors.common.gray[700]};
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  transition: all 0.2s ease;
-  
-  &:hover {
-    background: ${({ theme }) => theme.colors.primary.main};
-    color: white;
-    transform: translateY(-2px);
-  }
+  transition: all 0.3s ease;
   
   svg {
     width: 18px;
     height: 18px;
+    color: ${props => props.$active ? 'white' : '#636E72'};
+    fill: ${props => props.$active ? 'white' : 'none'};
+  }
+  
+  &:hover {
+    background: #6C9A7F;
+    
+    svg {
+      color: white;
+      fill: white;
+    }
   }
 `;
 
-const ProductCategoryName = styled.span`
-  display: block;
+const ProductInfo = styled.div`
+  padding: 1.25rem;
+`;
+
+const ProductCategory = styled.div`
   font-size: 0.75rem;
-  color: ${({ theme }) => theme.colors.primary.main};
-  margin-bottom: ${({ theme }) => theme.spacing(1)};
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  color: #999;
+  margin-bottom: 0.5rem;
+`;
+
+const ProductRating = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+`;
+
+const RatingValue = styled.span`
+  font-size: 0.75rem;
+  color: #636E72;
+`;
+
+const ProductName = styled.h3`
+  font-size: 1rem;
+  color: #2D3436;
+  margin-bottom: 0.75rem;
+  line-height: 1.4;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.3s ease;
+
+  &:hover {
+    color: #6C9A7F;
+  }
+`;
+
+const ProductPriceRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
 `;
 
 const ProductPrice = styled.div`
-  margin: ${({ theme }) => theme.spacing(2, 0)};
-  display: flex;
-  align-items: center;
-  gap: ${({ theme }) => theme.spacing(2)};
-`;
-
-const CurrentPrice = styled.span`
   font-size: 1.25rem;
   font-weight: 700;
-  color: ${({ theme }) => theme.colors.primary.main};
+  color: #6C9A7F;
 `;
 
-const OriginalPrice = styled.span`
+const OriginalPrice = styled.div`
   font-size: 1rem;
-  color: ${({ theme }) => theme.colors.common.gray[500]};
+  color: #999;
   text-decoration: line-through;
 `;
 
-const Rating = styled.div`
+const AddToCartButton = styled.button`
+  width: 100%;
+  padding: 0.75rem;
+  background: #6C9A7F;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-top: ${({ theme }) => theme.spacing(1)};
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.3s ease;
   
-  span {
-    font-size: 0.8rem;
-    color: ${({ theme }) => theme.colors.common.gray[600]};
-    margin-left: 4px;
+  &:hover {
+    background: #5A8569;
+    transform: translateY(-2px);
+  }
+  
+  svg {
+    width: 16px;
+    height: 16px;
   }
 `;
 
-const Star = styled.span<{ $filled: boolean }>`
-  color: ${({ theme, $filled }) => 
-    $filled ? theme.colors.warning.main : theme.colors.common.gray[300]};
-  font-size: 1rem;
-  line-height: 1;
-  
-  &::before {
-    content: '★';
-  }
-`;
-
-const NoResults = styled.div`
-  grid-column: 1 / -1;
-  text-align: center;
-  padding: ${({ theme }) => theme.spacing(8, 2)};
-  
-  h3 {
-    font-size: 1.5rem;
-    color: ${({ theme }) => theme.colors.common.gray[800]};
-    margin-bottom: ${({ theme }) => theme.spacing(1)};
-  }
-  
-  p {
-    color: ${({ theme }) => theme.colors.common.gray[600]};
-    margin-bottom: ${({ theme }) => theme.spacing(3)};
-  }
-`;
-
-const MobileFilterButton = styled(Button)`
-  display: none;
-  margin-bottom: ${({ theme }) => theme.spacing(2)};
-  
-  @media (max-width: 960px) {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-`;
-
-const SearchContainer = styled.div`
-  margin-bottom: ${({ theme }) => theme.spacing(3)};
-`;
-
-const LoadingSpinner = styled.div`
+const Pagination = styled.div`
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 300px;
-  font-size: 1.2rem;
-  color: ${({ theme }) => theme.colors.common.gray[600]};
+  gap: 0.5rem;
 `;
 
-const ErrorMessage = styled.div`
-  padding: ${({ theme }) => theme.spacing(4)};
-  background: ${({ theme }) => theme.colors.error.light};
-  color: ${({ theme }) => theme.colors.error.dark};
-  border-radius: ${({ theme }) => theme.shape.borderRadius}px;
-  text-align: center;
-  margin: ${({ theme }) => theme.spacing(4)};
+const PaginationButton = styled.button<{ $active?: boolean }>`
+  width: 40px;
+  height: 40px;
+  border: 1px solid ${props => props.$active ? '#6C9A7F' : '#E1E8ED'};
+  background: ${props => props.$active ? '#6C9A7F' : 'white'};
+  color: ${props => props.$active ? 'white' : '#636E72'};
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  
+  &:hover:not(:disabled) {
+    background: #6C9A7F;
+    color: white;
+    border-color: #6C9A7F;
+  }
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`;
+
+const ServicesSection = styled.div`
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2rem;
+  margin-top: 3rem;
+  
+  @media (max-width: 1024px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const ServiceCard = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: white;
+  padding: 2rem;
+  border-radius: 12px;
+  border: 1px solid #E1E8ED;
+`;
+
+const ServiceIcon = styled.div`
+  width: 60px;
+  height: 60px;
+  background: #E8F5EC;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  
+  svg {
+    width: 30px;
+    height: 30px;
+    color: #6C9A7F;
+  }
+`;
+
+const ServiceContent = styled.div``;
+
+const ServiceTitle = styled.h4`
+  font-size: 1rem;
+  font-weight: 700;
+  color: #2D3436;
+  margin-bottom: 0.25rem;
+`;
+
+const ServiceText = styled.p`
+  font-size: 0.875rem;
+  color: #636E72;
+  margin: 0;
 `;

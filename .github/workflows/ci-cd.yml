@@ -23,10 +23,10 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       
     - name: Setup Node.js
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4
       with:
         node-version: ${{ env.NODE_VERSION }}
         cache: 'npm'
@@ -38,14 +38,28 @@ jobs:
       run: |
         npm test -- --coverage --watchAll=false
         
-    - name: Upload coverage to Codecov
+    - name: Check for Codecov Token
+      id: check-codecov-token
       if: github.event_name != 'pull_request'
-      uses: codecov/codecov-action@v3
+      run: |
+        if [ -n "${{ secrets.CODECOV_TOKEN }}" ]; then
+          echo "HAS_CODECOV_TOKEN=true" >> $GITHUB_OUTPUT
+        else
+          echo "HAS_CODECOV_TOKEN=false" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Upload coverage to Codecov
+      if: github.event_name != 'pull_request' && steps.check-codecov-token.outputs.HAS_CODECOV_TOKEN == 'true'
+      uses: codecov/codecov-action@v4
       with:
-        token: ${{ secrets.CODECOV_TOKEN || 'dummy-token' }}
+        token: ${{ secrets.CODECOV_TOKEN }}
         file: ./coverage/lcov.info
         fail_ci_if_error: false
         verbose: true
+    
+    - name: Skip Codecov (No Token)
+      if: github.event_name != 'pull_request' && steps.check-codecov-token.outputs.HAS_CODECOV_TOKEN == 'false'
+      run: echo "Skipping Codecov upload - CODECOV_TOKEN not provided"
 
   build-and-deploy:
     name: Build and Deploy
@@ -55,10 +69,10 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       
     - name: Setup Node.js
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4
       with:
         node-version: ${{ env.NODE_VERSION }}
         cache: 'npm'
@@ -66,24 +80,30 @@ jobs:
     - name: Install Vercel CLI
       run: npm install --global vercel@latest
       
-    - name: Pull Vercel Environment Information
+    - name: Check Vercel Token
+      id: check-vercel-token
       if: github.event_name != 'pull_request' && github.event_name != ''
+      run: |
+        if [ -n "${{ secrets.VERCEL_TOKEN }}" ]; then
+          echo "HAS_VERCEL_TOKEN=true" >> $GITHUB_OUTPUT
+        else
+          echo "HAS_VERCEL_TOKEN=false" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Pull Vercel Environment Information
+      if: steps.check-vercel-token.outputs.HAS_VERCEL_TOKEN == 'true' && github.event_name != 'pull_request' && github.event_name != ''
       run: |
         vercel pull --yes --environment=${{ env.ENVIRONMENT }} --token=${{ secrets.VERCEL_TOKEN }}
       
     - name: Build Project Artifacts
-      if: github.event_name != 'pull_request' && github.event_name != ''
+      if: steps.check-vercel-token.outputs.HAS_VERCEL_TOKEN == 'true' && github.event_name != 'pull_request' && github.event_name != ''
       run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
   
     - name: Deploy to Vercel
-      if: github.event_name != 'pull_request' && github.event_name != ''
+      if: steps.check-vercel-token.outputs.HAS_VERCEL_TOKEN == 'true' && github.event_name != 'pull_request' && github.event_name != ''
       env:
         VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       run: |
-        if [ -z "$VERCEL_TOKEN" ]; then
-          echo "Vercel token not found. Skipping deployment."
-          exit 0
-        
         if [ "${{ env.ENVIRONMENT }}" = "production" ]; then
           echo "Deploying to production"
           vercel --prod --token=$VERCEL_TOKEN --confirm
@@ -91,3 +111,7 @@ jobs:
           echo "Deploying preview"
           vercel --token=$VERCEL_TOKEN --confirm
         fi
+    
+    - name: Skip Deployment (No Vercel Token)
+      if: steps.check-vercel-token.outputs.HAS_VERCEL_TOKEN == 'false' && github.event_name != 'pull_request' && github.event_name != ''
+      run: echo "Skipping Vercel deployment - VERCEL_TOKEN not provided"

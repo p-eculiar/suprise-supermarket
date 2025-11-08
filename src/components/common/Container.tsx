@@ -1,28 +1,36 @@
 import React from 'react';
 import styled from 'styled-components';
 
-interface ContainerProps {
+export interface ContainerProps {
   children: React.ReactNode;
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
+  centerContent?: boolean;
   className?: string;
 }
 
 export const Container: React.FC<ContainerProps> = ({ 
   children, 
   maxWidth = 'lg',
+  centerContent = false,
   className 
 }) => {
   return (
-    <StyledContainer $maxWidth={maxWidth} className={className}>
+    <StyledContainer $maxWidth={maxWidth} $centerContent={centerContent} className={className}>
       {children}
     </StyledContainer>
   );
 };
 
-const StyledContainer = styled.div<{ $maxWidth: string }>`
+const StyledContainer = styled.div<{ $maxWidth: string; $centerContent: boolean }>`
   width: 100%;
   margin: 0 auto;
   padding: 0 1rem;
+  ${({ $centerContent }) => $centerContent && `
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+  `}
   
   ${({ $maxWidth }) => {
     switch ($maxWidth) {

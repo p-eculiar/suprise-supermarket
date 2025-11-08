@@ -22,11 +22,11 @@ type EventAction =
   | 'test_event';  // Added for testing purposes
 
 interface EventParams {
-  [key: string]: string | number | boolean | null | undefined;
   event_category?: EventCategory;
   event_label?: string;
   value?: number;
   non_interaction?: boolean;
+  [key: string]: string | number | boolean | null | undefined;
 }
 
 /**
@@ -161,19 +161,25 @@ function sendToAnalyticsService(data: Record<string, any>) {
     console.log('[Analytics] Event:', data);
   }
 
-  // Send to Google Analytics (Universal Analytics)
-  if (googleAnalyticsId && typeof window !== 'undefined') {
-    sendToGoogleAnalytics(data);
-  }
+    try {
+    // Send to Google Analytics (Universal Analytics)
+    if (googleAnalyticsId && typeof window !== 'undefined' && typeof window.gtag === 'function') {
+      sendToGoogleAnalytics(data);
+    }
 
-  // Send to Google Tag Manager
-  if (googleTagManagerId && typeof window !== 'undefined' && (window as any).dataLayer) {
-    sendToGoogleTagManager(data);
-  }
+    // Send to Google Tag Manager
+    if (googleTagManagerId && typeof window !== 'undefined' && window.dataLayer) {
+      sendToGoogleTagManager(data);
+    }
 
-  // Send to custom analytics endpoint
-  if (customEndpoint && typeof window !== 'undefined') {
-    sendToCustomEndpoint(data, customEndpoint);
+    // Send to custom analytics endpoint
+    if (customEndpoint && typeof window !== 'undefined') {
+      sendToCustomEndpoint(data, customEndpoint);
+    }
+  } catch (error) {
+    if (debug) {
+      console.error('[Analytics] Error sending analytics:', error);
+    }
   }
 }
 
@@ -181,26 +187,33 @@ function sendToAnalyticsService(data: Record<string, any>) {
 function initGoogleAnalytics(measurementId: string) {
   if (typeof window === 'undefined') return;
 
-  // Load Google Analytics script if not already loaded
-  if (!document.querySelector('#google-analytics-script')) {
-    const script = document.createElement('script');
-    script.id = 'google-analytics-script';
-    script.async = true;
-    script.src = `https://www.googletagmanager.com/gtag/js?id=${measurementId}`;
-    document.head.appendChild(script);
+  // Initialize dataLayer if it doesn't exist
+  window.dataLayer = window.dataLayer || [];
+  
+  // Define gtag function if it doesn't exist
+  window.gtag = window.gtag || function() {
+    window.dataLayer.push(arguments);
+  };
 
-    window.dataLayer = window.dataLayer || [];
-    window.gtag = function() {
-      (window.dataLayer as any).push(arguments);
-    };
-    
-    gtag('js', new Date());
-    gtag('config', measurementId, {
-      send_page_view: false, // We'll handle page views manually
-      transport_url: 'https://www.google-analytics.com',
-      first_party_collection: true
-    });
+  // Only load the script in non-test environment
+  if (process.env.NODE_ENV !== 'test') {
+    // Load Google Analytics script if not already loaded
+    if (!document.querySelector('#google-analytics-script')) {
+      const script = document.createElement('script');
+      script.id = 'google-analytics-script';
+      script.async = true;
+      script.src = `https://www.googletagmanager.com/gtag/js?id=${measurementId}`;
+      document.head.appendChild(script);
+    }
   }
+  
+  // Initialize gtag
+  window.gtag('js', new Date());
+  window.gtag('config', measurementId, {
+    send_page_view: false, // We'll handle page views manually
+    transport_url: 'https://www.google-analytics.com',
+    first_party_collection: true
+  });
 }
 
 function sendToGoogleAnalytics(data: Record<string, any>) {
@@ -220,53 +233,109 @@ function sendToGoogleAnalytics(data: Record<string, any>) {
 function initGoogleTagManager(containerId: string) {
   if (typeof window === 'undefined') return;
 
-  if (!document.querySelector('#google-tag-manager-script')) {
-    // Main GTM script
-    const gtmScript = document.createElement('script');
-    gtmScript.id = 'google-tag-manager-script';
-    gtmScript.innerHTML = `
-      (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-      new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-      j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-      'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-      })(window,document,'script','dataLayer','${containerId}');
-    `;
-    document.head.appendChild(gtmScript);
+  // Initialize dataLayer if it doesn't exist
+  window.dataLayer = window.dataLayer || [];
+  
+  // Push the initial gtm.js event
+  window.dataLayer.push({
+    'gtm.start': new Date().getTime(),
+    'event': 'gtm.js'
+  });
+
+  // Only load the script in non-test environment
+  if (process.env.NODE_ENV !== 'test') {
+    // Check if script already exists
+    if (!document.querySelector('#google-tag-manager-script')) {
+      const script = document.createElement('script');
+      script.id = 'google-tag-manager-script';
+      script.async = true;
+      script.src = `https://www.googletagmanager.com/gtm.js?id=${containerId}`;
+      script.onerror = () => {
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn('Failed to load GTM script');
+        }
+      };
+      document.head.appendChild(script);
+    }
   }
 }
 
 function sendToGoogleTagManager(data: Record<string, any>) {
-  if (typeof window === 'undefined' || !(window as any).dataLayer) return;
+  if (typeof window === 'undefined' || !(window as any).dataLayer) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn('dataLayer not available');
+    }
+    return;
+  }
   
-  (window as any).dataLayer.push({
-    event: data.action,
-    ...data
-  });
+  try {
+    const { action, ...rest } = data;
+    (window as any).dataLayer.push({
+      event: action || 'interaction',
+      ...rest
+    });
+  } catch (error) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('Error pushing to dataLayer:', error);
+    }
+  }
 }
 
 // Custom endpoint implementation
 async function sendToCustomEndpoint(data: Record<string, any>, endpoint: string) {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined') {
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn('Custom endpoint not available in SSR');
+    }
+    return;
+  }
 
+  const { debug } = analyticsConfig;
+  const payload = JSON.stringify(data);
+  
   try {
-    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+    const blob = new Blob([payload], { type: 'application/json' });
     
     // Use Beacon API if available for better performance
     if (navigator.sendBeacon) {
-      navigator.sendBeacon(endpoint, blob);
-    } else {
-      // Fallback to fetch API
-      await fetch(endpoint, {
-        method: 'POST',
-        body: blob,
-        headers: { 'Content-Type': 'application/json' },
-        keepalive: true, // Ensures the request is sent even if the page is unloaded
+      if (debug) {
+        console.log('[Analytics] Sending via sendBeacon:', { endpoint, data });
+      }
+      const success = navigator.sendBeacon(endpoint, blob);
+      if (!success && debug) {
+        console.warn('[Analytics] sendBeacon failed, falling back to fetch');
+        throw new Error('sendBeacon failed');
+      }
+      return success;
+    }
+    
+    // Fallback to fetch API
+    if (debug) {
+      console.log('[Analytics] Sending via fetch:', { endpoint, data });
+    }
+    
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      body: blob,
+      headers: { 'Content-Type': 'application/json' },
+      keepalive: true, // Ensures the request is sent even if the page is unloaded
+      credentials: 'same-origin' // Include cookies for authenticated requests
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    return true;
+  } catch (error) {
+    if (debug || process.env.NODE_ENV !== 'production') {
+      console.error('[Analytics] Error sending to custom endpoint:', {
+        endpoint,
+        error,
+        payload: data
       });
     }
-  } catch (error) {
-    if (analyticsConfig.debug) {
-      console.error('[Analytics] Error sending to custom endpoint:', error);
-    }
+    throw error; // Re-throw to allow callers to handle the error
   }
 }
 
@@ -279,3 +348,5 @@ if (typeof window !== 'undefined') {
     debug: process.env.NODE_ENV !== 'production'
   });
 }
+
+export { sendToCustomEndpoint };

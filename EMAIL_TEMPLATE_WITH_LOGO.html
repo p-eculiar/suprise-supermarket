@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verify Your Email - Surprise Supermarket</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f5f5f5;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 40px 20px;">
+    <tr>
+      <td align="center">
+        <!-- Main Container -->
+        <table width="600" cellpadding="0" cellspacing="0" style="background: white; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); overflow: hidden;">
+          
+          <!-- Header with Logo and Gradient -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #6C9A7F 0%, #5A8470 100%); padding: 40px 30px; text-align: center;">
+              <!-- YOUR LOGO HERE - Replace the src with your actual logo URL -->
+              <img src="https://awepkphahdheqomgucby.supabase.co/storage/v1/object/sign/public-assets/suprise-removebg-preview-2.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9iYjE2Y2VjMy1mYWM3LTQ0MjgtOTNkNy1mYWVhMzc4MGNiZDkiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJwdWJsaWMtYXNzZXRzL3N1cHJpc2UtcmVtb3ZlYmctcHJldmlldy0yLnBuZyIsImlhdCI6MTc2MDExNjQzOCwiZXhwIjoyMDc1NDc2NDM4fQ.hitBNyi-7NsPzqYJr4PNxUqUZf69qpKshsNRHQE0waY" 
+                   alt="Surprise Supermarket Logo" 
+                   style="width: 80px; height: 80px; margin-bottom: 10px; border-radius: 12px; object-fit: contain; background: white; padding: 8px;">
+              
+              <h1 style="color: white; margin: 10px 0 0 0; font-size: 28px; font-weight: 700;">Surprise Supermarket</h1>
+              <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 14px;">Fresh Groceries, Delivered Daily</p>
+            </td>
+          </tr>
+          
+          <!-- Welcome Message -->
+          <tr>
+            <td style="padding: 40px 30px;">
+              <h2 style="color: #2D3436; font-size: 24px; margin: 0 0 20px 0; font-weight: 600;">
+                Welcome, {{ .Data.full_name }}! 🎉
+              </h2>
+              
+              <p style="color: #636E72; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+                Thank you for signing up with <strong>Surprise Supermarket</strong>! We're excited to have you join our community of smart shoppers.
+              </p>
+              
+              <p style="color: #636E72; font-size: 16px; line-height: 1.6; margin: 0 0 30px 0;">
+                To get started and access your account, please verify your email address by clicking the button below:
+              </p>
+              
+              <!-- Verification Button -->
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" style="padding: 20px 0;">
+                    <a href="{{ .ConfirmationURL }}" 
+                       style="background: linear-gradient(135deg, #6C9A7F 0%, #5A8470 100%); 
+                              color: white; 
+                              text-decoration: none; 
+                              padding: 16px 40px; 
+                              border-radius: 8px; 
+                              font-size: 16px; 
+                              font-weight: 600; 
+                              display: inline-block;
+                              box-shadow: 0 4px 12px rgba(108, 154, 127, 0.3);">
+                      ✉️ Verify Email Address
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              
+              <p style="color: #95A5A6; font-size: 13px; line-height: 1.5; margin: 20px 0 0 0; text-align: center;">
+                Or copy and paste this link in your browser:<br>
+                <a href="{{ .ConfirmationURL }}" style="color: #6C9A7F; word-break: break-all;">{{ .ConfirmationURL }}</a>
+              </p>
+            </td>
+          </tr>
+          
+          <!-- What's Next Section -->
+          <tr>
+            <td style="background: #F8F9FA; padding: 30px;">
+              <h3 style="color: #2D3436; font-size: 18px; margin: 0 0 20px 0; font-weight: 600;">
+                What's Next? 🚀
+              </h3>
+              
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="padding: 10px 0;">
+                    <span style="font-size: 24px;">🛍️</span>
+                    <strong style="color: #2D3436; margin-left: 10px;">Browse Products</strong>
+                    <p style="color: #636E72; font-size: 14px; margin: 5px 0 0 44px; line-height: 1.5;">
+                      Explore our wide selection of fresh groceries, organic produce, and household essentials.
+                    </p>
+                  </td>
+                </tr>
+                
+                <tr>
+                  <td style="padding: 10px 0;">
+                    <span style="font-size: 24px;">💚</span>
+                    <strong style="color: #2D3436; margin-left: 10px;">Save Favorites</strong>
+                    <p style="color: #636E72; font-size: 14px; margin: 5px 0 0 44px; line-height: 1.5;">
+                      Create wishlists and save your favorite items for quick reordering.
+                    </p>
+                  </td>
+                </tr>
+                
+                <tr>
+                  <td style="padding: 10px 0;">
+                    <span style="font-size: 24px;">🚚</span>
+                    <strong style="color: #2D3436; margin-left: 10px;">Fast Delivery</strong>
+                    <p style="color: #636E72; font-size: 14px; margin: 5px 0 0 44px; line-height: 1.5;">
+                      Get your groceries delivered fresh to your doorstep the same day!
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          
+          <!-- Important Note -->
+          <tr>
+            <td style="padding: 30px; border-top: 1px solid #E8E8E8;">
+              <p style="color: #95A5A6; font-size: 13px; line-height: 1.6; margin: 0;">
+                <strong>⏰ Important:</strong> This verification link will expire in 24 hours. If you didn't create an account with Surprise Supermarket, you can safely ignore this email.
+              </p>
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="background: #2D3436; padding: 30px; text-align: center;">
+              <!-- Logo in Footer (Optional) -->
+              <img src="https://YOUR_LOGO_URL_HERE.png" 
+                   alt="Surprise Supermarket" 
+                   style="width: 50px; height: 50px; margin-bottom: 10px; border-radius: 8px; object-fit: contain; background: white; padding: 6px;">
+              
+              <p style="color: white; font-size: 16px; font-weight: 600; margin: 0 0 10px 0;">
+                Surprise Supermarket
+              </p>
+              <p style="color: rgba(255,255,255,0.7); font-size: 13px; margin: 0 0 15px 0; line-height: 1.5;">
+                Fresh Groceries • Fast Delivery • Best Prices<br>
+                Your neighborhood supermarket, now online!
+              </p>
+              
+              <p style="color: rgba(255,255,255,0.5); font-size: 12px; margin: 20px 0 0 0;">
+                Need help? Contact us at <a href="mailto:support@surprisesupermarket.com" style="color: #6C9A7F; text-decoration: none;">support@surprisesupermarket.com</a>
+              </p>
+              
+              <p style="color: rgba(255,255,255,0.4); font-size: 11px; margin: 15px 0 0 0;">
+                © 2025 Surprise Supermarket. All rights reserved.
+              </p>
+            </td>
+          </tr>
+          
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
