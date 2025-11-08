@@ -4,25 +4,43 @@ import toast from '../components/common/Toast';
 export interface Notification {
   id: string;
   user_id: string;
-  type: 'order_status' | 'delivery_update' | 'payment' | 'promotion' | 'system';
   title: string;
   message: string;
-  data?: any;
+  type: 'order' | 'product' | 'promotion' | 'system';
   read: boolean;
+  data?: any;
   created_at: string;
-  action_url?: string;
+  updated_at: string;
 }
 
-export class NotificationService {
-  private static listeners: Map<string, () => void> = new Map();
+export interface NotificationPreferences {
+  email_notifications: boolean;
+  push_notifications: boolean;
+  order_updates: boolean;
+  product_alerts: boolean;
+  promotions: boolean;
+}
 
-  /**
-   * Get all notifications for a user
-   */
-  static async getUserNotifications(
-    userId: string,
-    limit: number = 50
-  ): Promise<Notification[]> {
+class NotificationService {
+  // Create a new notification
+  async createNotification(notification: Omit<Notification, 'id' | 'created_at' | 'updated_at'>) {
+    try {
+      const { data, error } = await supabase
+        .from('notifications')
+        .insert([notification])
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error creating notification:', error);
+      throw error;
+    }
+  }
+
+  // Get user notifications with real-time updates
+  async getUserNotifications(userId: string, limit: number = 20) {
     try {
       const { data, error } = await supabase
         .from('notifications')
@@ -32,17 +50,46 @@ export class NotificationService {
         .limit(limit);
 
       if (error) throw error;
-      return (data || []) as Notification[];
+      return data || [];
     } catch (error) {
       console.error('Error fetching notifications:', error);
-      return [];
+      throw error;
     }
   }
 
-  /**
-   * Get unread notification count
-   */
-  static async getUnreadCount(userId: string): Promise<number> {
+  // Mark notification as read
+  async markAsRead(notificationId: string) {
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .update({ read: true })
+        .eq('id', notificationId);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+      throw error;
+    }
+  }
+
+  // Mark all notifications as read
+  async markAllAsRead(userId: string) {
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .update({ read: true })
+        .eq('user_id', userId)
+        .eq('read', false);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+      throw error;
+    }
+  }
+
+  // Get unread notification count
+  async getUnreadCount(userId: string) {
     try {
       const { count, error } = await supabase
         .from('notifications')
@@ -53,52 +100,13 @@ export class NotificationService {
       if (error) throw error;
       return count || 0;
     } catch (error) {
-      console.error('Error fetching unread count:', error);
-      return 0;
+      console.error('Error getting unread count:', error);
+      throw error;
     }
   }
 
-  /**
-   * Mark notification as read
-   */
-  static async markAsRead(notificationId: string): Promise<boolean> {
-    try {
-      const { error } = await supabase
-        .from('notifications')
-        .update({ read: true })
-        .eq('id', notificationId);
-
-      if (error) throw error;
-      return true;
-    } catch (error) {
-      console.error('Error marking notification as read:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Mark all notifications as read
-   */
-  static async markAllAsRead(userId: string): Promise<boolean> {
-    try {
-      const { error } = await supabase
-        .from('notifications')
-        .update({ read: true })
-        .eq('user_id', userId)
-        .eq('read', false);
-
-      if (error) throw error;
-      return true;
-    } catch (error) {
-      console.error('Error marking all as read:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Delete notification
-   */
-  static async deleteNotification(notificationId: string): Promise<boolean> {
+  // Delete notification
+  async deleteNotification(notificationId: string) {
     try {
       const { error } = await supabase
         .from('notifications')
@@ -106,60 +114,16 @@ export class NotificationService {
         .eq('id', notificationId);
 
       if (error) throw error;
-      return true;
     } catch (error) {
       console.error('Error deleting notification:', error);
-      return false;
+      throw error;
     }
   }
 
-  /**
-   * Create a new notification
-   */
-  static async createNotification(
-    userId: string,
-    type: Notification['type'],
-    title: string,
-    message: string,
-    data?: any,
-    actionUrl?: string
-  ): Promise<boolean> {
-    try {
-      const { error } = await supabase
-        .from('notifications')
-        .insert([{
-          user_id: userId,
-          type,
-          title,
-          message,
-          data,
-          action_url: actionUrl,
-          read: false,
-          created_at: new Date().toISOString(),
-        }]);
-
-      if (error) throw error;
-      return true;
-    } catch (error) {
-      console.error('Error creating notification:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Subscribe to real-time notifications for a user
-   */
-  static subscribeToNotifications(
-    userId: string,
-    onNotification: (notification: Notification) => void
-  ): () => void {
-    const channelId = `notifications:${userId}`;
-
-    // Remove existing listener if any
-    this.unsubscribeFromNotifications(userId);
-
+  // Set up real-time notification subscription for users
+  setupUserNotificationSubscription(userId: string, onNotification: (notification: Notification) => void) {
     const channel = supabase
-      .channel(channelId)
+      .channel(`user-notifications-${userId}`)
       .on(
         'postgres_changes',
         {
@@ -169,135 +133,173 @@ export class NotificationService {
           filter: `user_id=eq.${userId}`,
         },
         (payload) => {
-          const notification = payload.new as Notification;
+          const newNotification = payload.new as Notification;
+          onNotification(newNotification);
           
           // Show toast notification
-          this.showToastNotification(notification);
-          
-          // Call callback
-          onNotification(notification);
-          
-          // Play notification sound (optional)
-          this.playNotificationSound();
+          this.showToastNotification(newNotification);
         }
       )
       .subscribe();
 
-    // Store cleanup function
-    const cleanup = () => {
-      channel.unsubscribe();
+    return () => {
+      supabase.removeChannel(channel);
     };
-
-    this.listeners.set(userId, cleanup);
-
-    return cleanup;
   }
 
-  /**
-   * Unsubscribe from notifications
-   */
-  static unsubscribeFromNotifications(userId: string): void {
-    const cleanup = this.listeners.get(userId);
-    if (cleanup) {
-      cleanup();
-      this.listeners.delete(userId);
-    }
-  }
-
-  /**
-   * Show toast notification
-   */
-  private static showToastNotification(notification: Notification): void {
-    const typeConfig = {
-      order_status: { icon: '📦', duration: 5000 },
-      delivery_update: { icon: '🚚', duration: 5000 },
-      payment: { icon: '💳', duration: 5000 },
-      promotion: { icon: '🎉', duration: 7000 },
-      system: { icon: '🔔', duration: 4000 },
-    };
-
-    const config = typeConfig[notification.type] || typeConfig.system;
-
-    toast.info(`${config.icon} ${notification.title}: ${notification.message}`);
-  }
-
-  /**
-   * Play notification sound
-   */
-  private static playNotificationSound(): void {
-    try {
-      const audio = new Audio('/notification.mp3');
-      audio.volume = 0.3;
-      audio.play().catch(() => {
-        // Ignore errors (user hasn't interacted with page yet)
-      });
-    } catch (error) {
-      // Ignore errors
-    }
-  }
-
-  /**
-   * Request browser notification permission
-   */
-  static async requestNotificationPermission(): Promise<boolean> {
-    if (!('Notification' in window)) {
-      return false;
-    }
-
-    if (Notification.permission === 'granted') {
-      return true;
-    }
-
-    if (Notification.permission !== 'denied') {
-      const permission = await Notification.requestPermission();
-      return permission === 'granted';
-    }
-
-    return false;
-  }
-
-  /**
-   * Show browser notification
-   */
-  static showBrowserNotification(notification: Notification): void {
-    if (Notification.permission === 'granted') {
-      const browserNotification = new Notification(notification.title, {
-        body: notification.message,
-        icon: '/logo192.png',
-        badge: '/logo192.png',
-        tag: notification.id,
-        requireInteraction: false,
-      });
-
-      browserNotification.onclick = () => {
-        window.focus();
-        if (notification.action_url) {
-          window.location.href = notification.action_url;
+  // Set up real-time notification subscription for admins
+  setupAdminNotificationSubscription(onNotification: (notification: Notification) => void) {
+    const channel = supabase
+      .channel('admin-notifications')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+        },
+        (payload) => {
+          const newNotification = payload.new as Notification;
+          onNotification(newNotification);
+          
+          // Show toast notification
+          this.showToastNotification(newNotification);
         }
-        browserNotification.close();
-      };
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }
+
+  // Enhanced setupNotificationSubscription that works for both users and admins
+  setupNotificationSubscription(userId: string, userRole: string, onNotification: (notification: Notification) => void) {
+    // For admins, subscribe to all notifications
+    if (userRole === 'admin') {
+      return this.setupAdminNotificationSubscription(onNotification);
+    }
+    
+    // For regular users, subscribe to their notifications only
+    return this.setupUserNotificationSubscription(userId, onNotification);
+  }
+
+  // Show toast notification based on type
+  private showToastNotification(notification: Notification) {
+    switch (notification.type) {
+      case 'order':
+        toast.info(`${notification.title}: ${notification.message}`);
+        break;
+      case 'product':
+        toast.success(`${notification.title}: ${notification.message}`);
+        break;
+      case 'promotion':
+        toast.warning(`${notification.title}: ${notification.message}`);
+        break;
+      case 'system':
+        toast.info(`${notification.title}: ${notification.message}`);
+        break;
+      default:
+        toast.info(notification.message);
     }
   }
 
-  /**
-   * Batch send notifications to multiple users
-   */
-  static async sendBatchNotifications(
-    userIds: string[],
-    type: Notification['type'],
-    title: string,
-    message: string,
-    data?: any
-  ): Promise<number> {
+  // Create admin notification
+  async createAdminNotification(title: string, message: string, type: 'order' | 'product' | 'promotion' | 'system' = 'system', data?: any) {
     try {
-      const notifications = userIds.map(userId => ({
+      // Get all admin users
+      const { data: admins, error: adminError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('role', 'admin');
+
+      if (adminError) throw adminError;
+
+      if (admins && admins.length > 0) {
+        // Create notifications for all admins
+        const notifications = admins.map((admin: any) => ({
+          user_id: admin.id,
+          title,
+          message,
+          type,
+          read: false,
+          data
+        }));
+
+        const { error: insertError } = await supabase
+          .from('notifications')
+          .insert(notifications);
+
+        if (insertError) throw insertError;
+      }
+    } catch (error) {
+      console.error('Error creating admin notifications:', error);
+      throw error;
+    }
+  }
+
+  // Create order-related notifications for both user and admins
+  async createOrderNotification(userId: string, orderId: string, status: string, orderNumber?: string) {
+    const notificationMap = {
+      'pending': {
+        title: 'Order Received! 🛒',
+        message: `Your order ${orderNumber ? `#${orderNumber}` : 'has been received'} and is being processed.`
+      },
+      'processing': {
+        title: 'Order Processing! ⚙️',
+        message: `Your order ${orderNumber ? `#${orderNumber}` : 'is being prepared'} and will be shipped soon.`
+      },
+      'shipped': {
+        title: 'Order Shipped! 🚚',
+        message: `Great news! Your order ${orderNumber ? `#${orderNumber}` : 'has been shipped'} and is on its way.`
+      },
+      'delivered': {
+        title: 'Order Delivered! ✅',
+        message: `Your order ${orderNumber ? `#${orderNumber}` : 'has been delivered'} successfully. Enjoy your groceries!`
+      },
+      'cancelled': {
+        title: 'Order Cancelled ❌',
+        message: `Your order ${orderNumber ? `#${orderNumber}` : 'has been cancelled'}. If you have questions, please contact support.`
+      }
+    };
+
+    const notification = notificationMap[status as keyof typeof notificationMap];
+    if (notification) {
+      // Create notification for the user
+      await this.createNotification({
         user_id: userId,
-        type,
-        title,
-        message,
-        data,
+        title: notification.title,
+        message: notification.message,
+        type: 'order',
         read: false,
-        created_at: new Date().toISOString(),
+        data: { orderId, status }
+      });
+
+      // Create notification for admins
+      await this.createAdminNotification(
+        `Order Update: ${orderNumber || orderId}`,
+        `${notification.title} - ${notification.message}`,
+        'order',
+        { orderId, status, userId, orderNumber }
+      );
+    }
+  }
+
+  // Create low stock notification for admins
+  async createLowStockNotification(productId: string, productName: string, currentStock: number) {
+    const { data: admins } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('role', 'admin');
+
+    if (admins) {
+      const notifications = admins.map(admin => ({
+        user_id: admin.id,
+        title: 'Low Stock Alert! ⚠️',
+        message: `${productName} is running low (${currentStock} units remaining). Consider restocking.`,
+        type: 'product' as const,
+        read: false,
+        data: { productId, productName, currentStock }
       }));
 
       const { error } = await supabase
@@ -305,105 +307,243 @@ export class NotificationService {
         .insert(notifications);
 
       if (error) throw error;
-      return notifications.length;
-    } catch (error) {
-      console.error('Error sending batch notifications:', error);
-      return 0;
     }
   }
 
-  /**
-   * Send order status notification
-   */
-  static async sendOrderStatusNotification(
-    userId: string,
-    orderId: string,
-    status: string
-  ): Promise<boolean> {
-    const statusMessages: Record<string, { title: string; message: string }> = {
-      pending: {
-        title: 'Order Received',
-        message: 'We have received your order and are processing it.',
-      },
-      confirmed: {
-        title: 'Order Confirmed',
-        message: 'Your order has been confirmed and is being prepared.',
-      },
-      preparing: {
-        title: 'Order Being Prepared',
-        message: 'We are carefully preparing your items.',
-      },
-      out_for_delivery: {
-        title: 'Out for Delivery',
-        message: 'Your order is on its way!',
-      },
-      delivered: {
-        title: 'Order Delivered',
-        message: 'Your order has been successfully delivered.',
-      },
-      cancelled: {
-        title: 'Order Cancelled',
-        message: 'Your order has been cancelled.',
-      },
-    };
-
-    const statusData = statusMessages[status] || {
-      title: 'Order Update',
-      message: 'Your order status has been updated.',
-    };
-
-    return this.createNotification(
-      userId,
-      'order_status',
-      statusData.title,
-      statusData.message,
-      { orderId, status },
-      `/dashboard/orders`
-    );
-  }
-
-  /**
-   * Send payment notification
-   */
-  static async sendPaymentNotification(
-    userId: string,
-    amount: number,
-    status: 'success' | 'failed',
-    reference: string
-  ): Promise<boolean> {
-    const title = status === 'success' 
-      ? 'Payment Successful' 
-      : 'Payment Failed';
-    
-    const message = status === 'success'
-      ? `Your payment of $${amount.toFixed(2)} was successful.`
-      : `Your payment of $${amount.toFixed(2)} failed. Please try again.`;
-
-    return this.createNotification(
-      userId,
-      'payment',
+  // Create promotion notification
+  async createPromotionNotification(userIds: string[], title: string, message: string, promotionData?: any) {
+    const notifications = userIds.map(userId => ({
+      user_id: userId,
       title,
       message,
-      { amount, status, reference },
-      '/dashboard/payment'
-    );
+      type: 'promotion' as const,
+      read: false,
+      data: promotionData
+    }));
+
+    const { error } = await supabase
+      .from('notifications')
+      .insert(notifications);
+
+    if (error) throw error;
   }
 
-  /**
-   * Send promotion notification
-   */
-  static async sendPromotionNotification(
-    userIds: string[],
-    title: string,
-    message: string,
-    promoCode?: string
-  ): Promise<number> {
-    return this.sendBatchNotifications(
-      userIds,
-      'promotion',
-      title,
-      message,
-      { promoCode }
-    );
+  // Get notification statistics for user dashboard
+  async getNotificationStats(userId: string) {
+    try {
+      const { data, error } = await supabase.rpc('get_notification_stats', { user_id: userId });
+      if (error) throw error;
+      return data[0] || {
+        total_count: 0,
+        unread_count: 0,
+        order_notifications: 0,
+        product_notifications: 0,
+        promotion_notifications: 0,
+        system_notifications: 0
+      };
+    } catch (error) {
+      console.error('Error getting notification stats:', error);
+      return {
+        total_count: 0,
+        unread_count: 0,
+        order_notifications: 0,
+        product_notifications: 0,
+        promotion_notifications: 0,
+        system_notifications: 0
+      };
+    }
+  }
+
+  // Get notification statistics for admin dashboard
+  async getAdminNotificationStats() {
+    try {
+      const { data, error } = await supabase.rpc('get_admin_notification_stats');
+      if (error) throw error;
+      return data[0] || {
+        total_count: 0,
+        unread_count: 0,
+        today_count: 0,
+        order_notifications: 0,
+        product_notifications: 0,
+        promotion_notifications: 0,
+        system_notifications: 0
+      };
+    } catch (error) {
+      console.error('Error getting admin notification stats:', error);
+      return {
+        total_count: 0,
+        unread_count: 0,
+        today_count: 0,
+        order_notifications: 0,
+        product_notifications: 0,
+        promotion_notifications: 0,
+        system_notifications: 0
+      };
+    }
+  }
+
+  // Get notification preferences
+  async getNotificationPreferences(userId: string): Promise<NotificationPreferences> {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('email_notifications, push_notifications, order_updates, product_alerts, promotions')
+        .eq('id', userId)
+        .single();
+
+      if (error) throw error;
+      return data || {
+        email_notifications: true,
+        push_notifications: true,
+        order_updates: true,
+        product_alerts: true,
+        promotions: true
+      };
+    } catch (error) {
+      console.error('Error getting notification preferences:', error);
+      return {
+        email_notifications: true,
+        push_notifications: true,
+        order_updates: true,
+        product_alerts: true,
+        promotions: true
+      };
+    }
+  }
+
+  // Update notification preferences
+  async updateNotificationPreferences(userId: string, preferences: Partial<NotificationPreferences>) {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update(preferences)
+        .eq('id', userId);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error updating notification preferences:', error);
+      throw error;
+    }
+  }
+
+  // Get detailed notification preferences
+  async getDetailedNotificationPreferences(userId: string) {
+    try {
+      const { data, error } = await supabase
+        .from('notification_preferences')
+        .select('*')
+        .eq('user_id', userId);
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error getting detailed notification preferences:', error);
+      return [];
+    }
+  }
+
+  // Update notification preference
+  async updateNotificationPreference(
+    userId: string,
+    preferenceType: string,
+    category: string,
+    enabled: boolean
+  ) {
+    try {
+      const { error } = await supabase
+        .from('notification_preferences')
+        .upsert({
+          user_id: userId,
+          preference_type: preferenceType,
+          category,
+          enabled
+        }, {
+          onConflict: 'user_id,preference_type,category'
+        });
+
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      console.error('Error updating notification preference:', error);
+      return false;
+    }
+  }
+
+  // Check if user should receive a specific type of notification
+  async shouldReceiveNotification(userId: string, category: string, type: string = 'email') {
+    try {
+      // First check the detailed preferences
+      const { data: detailedPrefs, error: detailedError } = await supabase
+        .from('notification_preferences')
+        .select('enabled')
+        .eq('user_id', userId)
+        .eq('preference_type', type)
+        .eq('category', category)
+        .single();
+
+      if (!detailedError && detailedPrefs) {
+        return detailedPrefs.enabled;
+      }
+
+      // Fallback to general preferences
+      const { data: generalPrefs, error: generalError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (!generalError && generalPrefs) {
+        // Type-safe access to preference fields
+        switch (type) {
+          case 'email':
+            return (generalPrefs as any).email_notifications !== false;
+          case 'push':
+            return (generalPrefs as any).push_notifications !== false;
+          default:
+            return true;
+        }
+      }
+
+      // Default to true if no preferences found
+      return true;
+    } catch (error) {
+      console.error('Error checking notification preference:', error);
+      return true;
+    }
+  }
+
+  // Enhanced create notification that respects user preferences
+  async createNotificationWithPreferences(notification: Omit<Notification, 'id' | 'created_at' | 'updated_at'>) {
+    try {
+      // Check if user wants this type of notification
+      const shouldReceive = await this.shouldReceiveNotification(
+        notification.user_id,
+        notification.type,
+        'email' // or 'push' depending on the notification type
+      );
+
+      if (!shouldReceive) {
+        console.log(`User ${notification.user_id} has disabled ${notification.type} notifications`);
+        return null;
+      }
+
+      const { data, error } = await supabase
+        .from('notifications')
+        .insert([notification])
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      // Show toast notification
+      this.showToastNotification(data);
+      
+      return data;
+    } catch (error) {
+      console.error('Error creating notification with preferences:', error);
+      throw error;
+    }
   }
 }
+
+export const notificationService = new NotificationService();

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
+import { useRealtime } from '../../hooks/useRealtime';
 import toast from '../../components/common/Toast';
 import { FiSend, FiMessageSquare, FiClock, FiCheckCircle, FiAlertCircle } from 'react-icons/fi';
 
@@ -32,6 +33,15 @@ const Messages: React.FC = () => {
     }
   }, [user]);
 
+  // Realtime updates for user's messages
+  useRealtime({
+    table: 'messages',
+    events: ['INSERT', 'UPDATE', 'DELETE'],
+    filter: user ? { column: 'user_id', value: user.id } : undefined,
+    onEvent: () => loadMessages(),
+    channelName: 'user-messages-realtime'
+  });
+
   const loadMessages = async () => {
     if (!user) return;
 
@@ -43,7 +53,12 @@ const Messages: React.FC = () => {
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error loading messages:', error);
+        // If table doesn't exist or other error, show empty state
+        setMessages([]);
+        return;
+      }
       setMessages(data || []);
     } catch (error) {
       console.error('Error loading messages:', error);
@@ -61,14 +76,15 @@ const Messages: React.FC = () => {
     }
 
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('messages')
         .insert([{
           user_id: user.id,
           subject: newMessage.subject,
           message: newMessage.message,
           status: 'open'
-        }]);
+        }])
+        .select();
 
       if (error) throw error;
 
@@ -76,9 +92,9 @@ const Messages: React.FC = () => {
       setNewMessage({ subject: '', message: '' });
       setIsComposing(false);
       loadMessages();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending message:', error);
-      toast.error('Failed to send message. Please try again.');
+      toast.error(`Failed to send message: ${error.message || 'Please try again.'}`);
     }
   };
 
@@ -183,19 +199,19 @@ const Messages: React.FC = () => {
                   {msg.status}
                 </StatusBadge>
               </MessageHeader>
-              <MessagePreview>{msg.message.slice(0, 100)}...</MessagePreview>
+              <MessagePreview>
+                {msg.message.length > 100 
+                  ? `${msg.message.substring(0, 100)}...` 
+                  : msg.message}
+              </MessagePreview>
               <MessageFooter>
                 <MessageDate>
-                  <FiClock />
-                  {new Date(msg.created_at).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric'
-                  })}
+                  {new Date(msg.created_at).toLocaleDateString()}
                 </MessageDate>
                 {msg.admin_response && (
                   <ResponseIndicator>
-                    <FiCheckCircle /> Reply received
+                    <FiCheckCircle />
+                    <span>Response received</span>
                   </ResponseIndicator>
                 )}
               </MessageFooter>
@@ -211,38 +227,41 @@ const Messages: React.FC = () => {
             <ModalHeader>
               <div>
                 <h2>{selectedMessage.subject}</h2>
-                <StatusBadge $color={getStatusColor(selectedMessage.status)}>
-                  {getStatusIcon(selectedMessage.status)}
-                  {selectedMessage.status}
-                </StatusBadge>
+                <p>Sent on {new Date(selectedMessage.created_at).toLocaleString()}</p>
               </div>
-              <ModalCloseButton onClick={() => setSelectedMessage(null)}>×</ModalCloseButton>
+              <ModalCloseButton onClick={() => setSelectedMessage(null)}>
+                ×
+              </ModalCloseButton>
             </ModalHeader>
-
             <ModalBody>
               <MessageThread>
-                <ThreadMessage $isUser>
-                  <ThreadLabel>Your Message</ThreadLabel>
+                <ThreadMessage $isUser={true}>
+                  <ThreadLabel>You</ThreadLabel>
                   <ThreadDate>
                     {new Date(selectedMessage.created_at).toLocaleString()}
                   </ThreadDate>
-                  <ThreadText>{selectedMessage.message}</ThreadText>
+                  <ThreadText>
+                    {selectedMessage.message}
+                  </ThreadText>
                 </ThreadMessage>
-
-                {selectedMessage.admin_response && (
+                
+                {selectedMessage.admin_response ? (
                   <ThreadMessage $isUser={false}>
-                    <ThreadLabel>Support Response</ThreadLabel>
+                    <ThreadLabel>Support Team</ThreadLabel>
                     <ThreadDate>
-                      {selectedMessage.responded_at ? new Date(selectedMessage.responded_at).toLocaleString() : 'Recently'}
+                      {selectedMessage.responded_at 
+                        ? new Date(selectedMessage.responded_at).toLocaleString()
+                        : 'Response date not available'}
                     </ThreadDate>
-                    <ThreadText>{selectedMessage.admin_response}</ThreadText>
+                    <ThreadText>
+                      {selectedMessage.admin_response}
+                    </ThreadText>
                   </ThreadMessage>
-                )}
-
-                {!selectedMessage.admin_response && (
+                ) : (
                   <WaitingMessage>
                     <FiClock />
-                    <p>Waiting for support team response...</p>
+                    <p>Waiting for response</p>
+                    <span>We'll get back to you soon</span>
                   </WaitingMessage>
                 )}
               </MessageThread>
@@ -254,82 +273,112 @@ const Messages: React.FC = () => {
   );
 };
 
-export default Messages;
-
 // Styled Components
 const Container = styled.div`
   padding: 2rem;
   max-width: 1200px;
   margin: 0 auto;
+  
+  @media (max-width: 768px) {
+    padding: 1rem;
+  }
 `;
 
 const Header = styled.div`
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   margin-bottom: 2rem;
+  
+  @media (max-width: 768px) {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
 `;
 
 const Title = styled.h1`
   font-size: 2rem;
   font-weight: 700;
-  color: #2D3436;
-  margin-bottom: 0.5rem;
+  color: ${({ theme }) => theme.colors.text.primary};
+  margin: 0;
+  
+  @media (max-width: 768px) {
+    font-size: 1.75rem;
+  }
 `;
 
 const Subtitle = styled.p`
-  color: #636E72;
-  font-size: 1rem;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 1.1rem;
+  margin: 0;
+  
+  @media (max-width: 768px) {
+    font-size: 1rem;
+  }
 `;
 
 const NewMessageButton = styled.button`
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.5rem;
-  background: #6C9A7F;
+  gap: 0.75rem;
+  padding: 0.875rem 1.5rem;
+  background: #6C9A7F; /* Sidebar green color */
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: 12px;
   font-weight: 600;
+  font-size: 1rem;
   cursor: pointer;
   transition: all 0.3s ease;
-
+  
   &:hover {
-    background: #5A8470;
+    background: #5A8470; /* Darker green on hover */
     transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+  }
+  
+  @media (max-width: 768px) {
+    padding: 0.75rem;
+    justify-content: center;
   }
 `;
 
 const ComposeCard = styled.div`
   background: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   margin-bottom: 2rem;
-  overflow: hidden;
+  
+  @media (max-width: 768px) {
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
 `;
 
 const ComposeHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.5rem;
-  border-bottom: 1px solid #DFE6E9;
-
+  margin-bottom: 1.5rem;
+  
   h3 {
-    font-size: 1.25rem;
-    color: #2D3436;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
     margin: 0;
   }
 `;
 
 const CloseButton = styled.button`
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border: none;
   background: #F8F9FA;
   border-radius: 50%;
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   cursor: pointer;
   color: #636E72;
   display: flex;
@@ -343,178 +392,117 @@ const CloseButton = styled.button`
 `;
 
 const ComposeBody = styled.div`
-  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
 `;
 
 const FormGroup = styled.div`
-  margin-bottom: 1.5rem;
-
-  &:last-child {
-    margin-bottom: 0;
-  }
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 `;
 
 const Label = styled.label`
-  display: block;
   font-weight: 600;
-  margin-bottom: 0.5rem;
-  color: #2D3436;
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-size: 1rem;
 `;
 
 const Input = styled.input`
-  width: 100%;
-  padding: 0.75rem 1rem;
-  border: 2px solid #DFE6E9;
-  border-radius: 8px;
+  padding: 0.875rem 1rem;
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: 12px;
   font-size: 1rem;
-  transition: all 0.3s ease;
-
+  color: ${({ theme }) => theme.colors.text.primary};
+  transition: all 0.2s ease;
+  
   &:focus {
     outline: none;
-    border-color: #6C9A7F;
+    border-color: ${({ theme }) => theme.colors.primary};
+    box-shadow: 0 0 0 3px ${({ theme }) => `${theme.colors.primary}20`};
+  }
+  
+  &::placeholder {
+    color: ${({ theme }) => theme.colors.text.secondary};
   }
 `;
 
 const TextArea = styled.textarea`
-  width: 100%;
-  padding: 0.75rem 1rem;
-  border: 2px solid #DFE6E9;
-  border-radius: 8px;
+  padding: 1rem;
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: 12px;
   font-size: 1rem;
   font-family: inherit;
+  color: ${({ theme }) => theme.colors.text.primary};
   resize: vertical;
-  transition: all 0.3s ease;
-
+  min-height: 150px;
+  transition: all 0.2s ease;
+  
   &:focus {
     outline: none;
-    border-color: #6C9A7F;
+    border-color: ${({ theme }) => theme.colors.primary};
+    box-shadow: 0 0 0 3px ${({ theme }) => `${theme.colors.primary}20`};
+  }
+  
+  &::placeholder {
+    color: ${({ theme }) => theme.colors.text.secondary};
   }
 `;
 
 const ComposeFooter = styled.div`
   display: flex;
-  gap: 1rem;
-  padding: 1.5rem;
-  border-top: 1px solid #DFE6E9;
   justify-content: flex-end;
+  gap: 1rem;
+  
+  @media (max-width: 768px) {
+    flex-direction: column;
+  }
 `;
 
 const CancelButton = styled.button`
-  padding: 0.75rem 1.5rem;
-  background: white;
+  padding: 0.875rem 1.5rem;
+  background: #F8F9FA;
   color: #636E72;
-  border: 2px solid #DFE6E9;
-  border-radius: 8px;
+  border: 1px solid #DFE6E9;
+  border-radius: 12px;
   font-weight: 600;
+  font-size: 1rem;
   cursor: pointer;
   transition: all 0.3s ease;
-
+  
   &:hover {
-    background: #F8F9FA;
+    background: #DFE6E9;
+  }
+  
+  @media (max-width: 768px) {
+    padding: 0.75rem;
   }
 `;
 
 const SendButton = styled.button`
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.5rem;
-  background: #6C9A7F;
+  gap: 0.75rem;
+  padding: 0.875rem 1.5rem;
+  background: #6C9A7F; /* Sidebar green color */
   color: white;
   border: none;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-
-  &:hover {
-    background: #5A8470;
-  }
-`;
-
-const MessagesList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-`;
-
-const MessageCard = styled.div`
-  background: white;
   border-radius: 12px;
-  padding: 1.5rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  font-weight: 600;
+  font-size: 1rem;
   cursor: pointer;
   transition: all 0.3s ease;
-
+  
   &:hover {
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    background: #5A8470; /* Darker green on hover */
     transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
   }
-`;
-
-const MessageHeader = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.75rem;
-`;
-
-const MessageSubject = styled.h3`
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: #2D3436;
-  margin: 0;
-`;
-
-const StatusBadge = styled.div<{ $color: string }>`
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.375rem 0.75rem;
-  background: ${({ $color }) => $color}20;
-  color: ${({ $color }) => $color};
-  border-radius: 20px;
-  font-weight: 600;
-  font-size: 0.875rem;
-  text-transform: capitalize;
-`;
-
-const MessagePreview = styled.p`
-  color: #636E72;
-  margin: 0 0 1rem 0;
-  line-height: 1.6;
-`;
-
-const MessageFooter = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-`;
-
-const MessageDate = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-  color: #636E72;
-
-  svg {
-    width: 14px;
-    height: 14px;
-  }
-`;
-
-const ResponseIndicator = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-  color: #27AE60;
-  font-weight: 600;
-
-  svg {
-    width: 16px;
-    height: 16px;
+  
+  @media (max-width: 768px) {
+    padding: 0.75rem;
   }
 `;
 
@@ -522,7 +510,8 @@ const EmptyState = styled.div`
   text-align: center;
   padding: 4rem 2rem;
   background: white;
-  border-radius: 12px;
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 
   svg {
     font-size: 4rem;
@@ -538,7 +527,103 @@ const EmptyState = styled.div`
 
   p {
     color: #636E72;
+    margin: 0;
   }
+`;
+
+const MessagesList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+`;
+
+const MessageCard = styled.div`
+  background: white;
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border-left: 4px solid ${({ theme }) => theme.colors.primary};
+  
+  &:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+  }
+  
+  @media (max-width: 768px) {
+    padding: 1.25rem;
+  }
+`;
+
+const MessageHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+  
+  @media (max-width: 768px) {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+`;
+
+const MessageSubject = styled.div`
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+`;
+
+const StatusBadge = styled.div<{ $color: string }>`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  background: ${({ $color }) => `${$color}20`};
+  color: ${({ $color }) => $color};
+  font-weight: 600;
+  font-size: 0.875rem;
+  
+  svg {
+    font-size: 1rem;
+  }
+`;
+
+const MessagePreview = styled.div`
+  color: ${({ theme }) => theme.colors.text.secondary};
+  line-height: 1.6;
+  margin-bottom: 1rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+`;
+
+const MessageFooter = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  
+  @media (max-width: 768px) {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+`;
+
+const MessageDate = styled.div`
+  font-size: 0.875rem;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`;
+
+const ResponseIndicator = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #2D7A2D; /* Success green color from theme */
+  font-weight: 600;
 `;
 
 const LoadingState = styled.div`
@@ -589,6 +674,11 @@ const ModalContent = styled.div`
   width: 100%;
   max-height: 90vh;
   overflow-y: auto;
+  
+  @media (max-width: 768px) {
+    max-width: 95vw;
+    max-height: 95vh;
+  }
 `;
 
 const ModalHeader = styled.div`
@@ -603,6 +693,19 @@ const ModalHeader = styled.div`
       font-size: 1.5rem;
       color: #2D3436;
       margin: 0 0 0.5rem 0;
+    }
+    
+    p {
+      color: #636E72;
+      margin: 0;
+    }
+  }
+  
+  @media (max-width: 768px) {
+    padding: 1.25rem;
+    
+    > div h2 {
+      font-size: 1.25rem;
     }
   }
 `;
@@ -628,6 +731,10 @@ const ModalCloseButton = styled.button`
 
 const ModalBody = styled.div`
   padding: 1.5rem;
+  
+  @media (max-width: 768px) {
+    padding: 1.25rem;
+  }
 `;
 
 const MessageThread = styled.div`
@@ -680,4 +787,12 @@ const WaitingMessage = styled.div`
     margin: 0;
     font-weight: 600;
   }
+  
+  span {
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: normal;
+  }
 `;
+
+export default Messages;

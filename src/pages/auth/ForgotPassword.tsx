@@ -86,15 +86,12 @@ const ForgotPassword: React.FC = () => {
               </Text>
             </Alert>
           ) : (
-            <Button 
+            <SubmitButton 
               type="submit" 
-              variant="primary" 
-              fullWidth 
-              isLoading={isLoading}
               disabled={isLoading}
             >
-              Send Reset Instructions
-            </Button>
+              {isLoading ? 'Sending Instructions...' : 'Send Reset Instructions'}
+            </SubmitButton>
           )}
 
           <Text mt={3} textAlign="center">
@@ -138,4 +135,28 @@ const Alert = styled.div<{ success?: boolean }>`
   text-align: center;
   border: 1px solid ${({ success }) => 
     success ? 'var(--success)' : 'var(--error)'};
+`;
+
+const SubmitButton = styled.button`
+  width: 100%;
+  padding: 1rem;
+  background: #6C9A7F;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  
+  &:hover:not(:disabled) {
+    background: #5A8569;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(108, 154, 127, 0.3);
+  }
+  
+  &:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
 `;

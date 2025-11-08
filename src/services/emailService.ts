@@ -34,36 +34,41 @@ export class EmailNotificationService {
    */
   private static async sendEmail(to: string, subject: string, html: string): Promise<boolean> {
     try {
-      // Using fetch API to call Resend API
-      // You can replace this with SendGrid, Mailgun, AWS SES, etc.
-      const RESEND_API_KEY = process.env.REACT_APP_RESEND_API_KEY;
-      const FROM_EMAIL = process.env.REACT_APP_FROM_EMAIL || 'noreply@surprisesupermarket.com';
-
-      if (!RESEND_API_KEY) {
-        console.warn('Resend API key not configured. Email queued but not sent.');
+      // Get Resend API key from environment variables
+      const resendApiKey = process.env.REACT_APP_RESEND_API_KEY;
+      const fromEmail = process.env.REACT_APP_FROM_EMAIL || 'onboarding@resend.dev';
+      
+      // If no API key is configured, log and return false
+      if (!resendApiKey) {
+        console.error('RESEND_API_KEY not configured in environment variables');
         return false;
       }
 
+      // Send email using Resend API
       const response = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${RESEND_API_KEY}`,
+          'Authorization': `Bearer ${resendApiKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          from: FROM_EMAIL,
+          from: fromEmail,
           to: [to],
           subject: subject,
           html: html,
         }),
       });
 
-      if (!response.ok) {
-        console.error('Email sending failed:', await response.text());
+      const result = await response.json();
+      console.log('Email API response:', result);
+      
+      if (response.ok) {
+        console.log(`Email successfully sent to ${to}`);
+        return true;
+      } else {
+        console.error(`Failed to send email to ${to}:`, result);
         return false;
       }
-
-      return true;
     } catch (error) {
       console.error('Error sending email:', error);
       return false;
@@ -287,7 +292,7 @@ export class EmailNotificationService {
               
               <p>${productData.productDescription}</p>
               
-              <div class="price">$${productData.productPrice.toFixed(2)}</div>
+              <div class="price">${productData.productPrice.toFixed(2)}</div>
               
               <a href="${process.env.REACT_APP_SITE_URL || 'http://localhost:3000'}/products/${productData.productId}" class="button">
                 View Product →
@@ -478,5 +483,18 @@ export class EmailNotificationService {
       console.error('Error sending pending notifications:', error);
       throw new Error(`Failed to send pending notifications: ${error.message}`);
     }
+  }
+
+  /**
+   * Public method for sending individual emails
+   * This can be used for bulk email sending with custom rate limiting
+   */
+  static async sendIndividualEmail(to: string, subject: string, html: string): Promise<boolean> {
+    return await this['sendEmail'](to, subject, html);
+  }
+
+  // Expose supabase for logging purposes
+  static get supabase() {
+    return supabase;
   }
 }

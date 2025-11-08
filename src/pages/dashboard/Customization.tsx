@@ -59,6 +59,7 @@ const Customization: React.FC = () => {
       return data.publicUrl;
     } catch (error) {
       console.error('Error uploading avatar:', error);
+      toast.error('Failed to upload avatar');
       return null;
     }
   };

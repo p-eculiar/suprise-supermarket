@@ -4,10 +4,12 @@ import { useNavigate } from 'react-router-dom';
 import { FiSearch, FiX, FiTrendingUp, FiClock } from 'react-icons/fi';
 import { SearchService, SearchResult } from '../../services/searchService';
 import { useAuth } from '../../contexts/AuthContext';
+import { useSettings } from '../../contexts/SettingsContext';
 
 const GlobalSearch: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { formatCurrency } = useSettings();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -185,7 +187,7 @@ const GlobalSearch: React.FC = () => {
                       <ResultDescription>{result.description}</ResultDescription>
                     )}
                     {result.price && (
-                      <ResultPrice>${result.price.toFixed(2)}</ResultPrice>
+                      <ResultPrice>{formatCurrency(result.price)}</ResultPrice>
                     )}
                   </ResultContent>
                   {result.imageUrl && (

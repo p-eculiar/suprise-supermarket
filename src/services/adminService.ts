@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { productService } from './productService';
+import { useQueryClient } from '@tanstack/react-query';
 
 export interface DashboardStats {
   totalRevenue: number;

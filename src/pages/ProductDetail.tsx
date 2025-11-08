@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import styled from 'styled-components';
 import { 
-  FiHeart, FiShoppingCart, FiMinus, FiPlus, FiStar,
-  FiFacebook, FiTwitter, FiInstagram, FiLink
+  FiHeart, FiShoppingCart, FiMinus, FiPlus, FiStar
 } from 'react-icons/fi';
 import { motion } from 'framer-motion';
 import { useCart } from '../contexts/CartContext';
 import { useWishlist } from '../contexts/WishlistContext';
 import { productService } from '../services/productService';
+import { useRealtime } from '../hooks/useRealtime';
+import { useSettings } from '../contexts/SettingsContext';
 import toast from '../components/common/Toast';
 
 interface Product {
@@ -32,6 +33,7 @@ const ProductDetail: React.FC = () => {
   const navigate = useNavigate();
   const { addToCart } = useCart();
   const { addToWishlist, isInWishlist } = useWishlist();
+  const { formatCurrency } = useSettings();
 
   const [product, setProduct] = useState<Product | null>(null);
   const [selectedImage, setSelectedImage] = useState(0);
@@ -39,6 +41,7 @@ const ProductDetail: React.FC = () => {
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState<'description' | 'additional' | 'reviews'>('description');
   const [loading, setLoading] = useState(true);
+  const [related, setRelated] = useState<Product[]>([]);
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -61,7 +64,7 @@ const ProductDetail: React.FC = () => {
           name: dbProduct.name,
           description: dbProduct.description || 'No description available.',
           price: dbProduct.price,
-          comparePrice: dbProduct.discount ? dbProduct.price / (1 - dbProduct.discount / 100) : undefined,
+          comparePrice: dbProduct.discount !== undefined ? dbProduct.price / (1 - (dbProduct.discount || 0) / 100) : undefined,
           rating: dbProduct.rating || 4.5,
           reviews: 0, // Can be added to DB later
           images: dbProduct.image_url ? [dbProduct.image_url] : ['https://via.placeholder.com/600'],
@@ -77,6 +80,27 @@ const ProductDetail: React.FC = () => {
         };
         
         setProduct(transformedProduct);
+
+        // Load related products from the same category (excluding current)
+        try {
+          const rel = await productService.getAllProducts({ category: transformedProduct.category });
+          const relatedFiltered = (rel || []).filter(p => p.id !== transformedProduct.id).slice(0, 4);
+          const mapped = relatedFiltered.map(p => ({
+            id: p.id,
+            name: p.name,
+            description: p.description || '',
+            price: p.price,
+            comparePrice: p.discount !== undefined ? p.price / (1 - (p.discount || 0) / 100) : undefined,
+            rating: p.rating || 0,
+            reviews: 0,
+            images: p.image_url ? [p.image_url] : ['https://via.placeholder.com/600'],
+            category: p.category,
+            tags: [p.category],
+            sku: p.id.slice(0, 12).toUpperCase(),
+            inStock: p.stock > 0,
+          }));
+          setRelated(mapped);
+        } catch {}
       } catch (error) {
         console.error('Error fetching product:', error);
         toast.error('Failed to load product details');
@@ -87,6 +111,106 @@ const ProductDetail: React.FC = () => {
     };
     fetchProduct();
   }, [id, navigate]);
+
+  // Add event listener for product updates to refresh the product details
+  useEffect(() => {
+    const handleProductUpdate = async () => {
+      console.log('🔄 Product updated, refreshing product detail page');
+      if (!id) return;
+      
+      try {
+        // Fetch updated product from database
+        const dbProduct = await productService.getProductById(id);
+        
+        if (!dbProduct) {
+          toast.error('Product not found');
+          navigate('/products');
+          return;
+        }
+
+        // Transform database product to component format
+        const transformedProduct: Product = {
+          id: dbProduct.id,
+          name: dbProduct.name,
+          description: dbProduct.description || 'No description available.',
+          price: dbProduct.price,
+          comparePrice: dbProduct.discount !== undefined ? dbProduct.price / (1 - (dbProduct.discount || 0) / 100) : undefined,
+          rating: dbProduct.rating || 4.5,
+          reviews: 0,
+          images: dbProduct.image_url ? [dbProduct.image_url] : ['https://via.placeholder.com/600'],
+          category: dbProduct.category,
+          tags: [dbProduct.category],
+          sku: dbProduct.id.slice(0, 12).toUpperCase(),
+          inStock: dbProduct.stock > 0,
+          additionalInfo: {
+            'Product Type': dbProduct.category,
+            'Stock Available': `${dbProduct.stock} units`,
+            'Status': dbProduct.stock > 0 ? 'In Stock' : 'Out of Stock',
+          }
+        };
+        
+        setProduct(transformedProduct);
+        
+        // Refresh related products
+        try {
+          const rel = await productService.getAllProducts({ category: transformedProduct.category });
+          const relatedFiltered = (rel || []).filter(p => p.id !== transformedProduct.id).slice(0, 4);
+          const mapped = relatedFiltered.map(p => ({
+            id: p.id,
+            name: p.name,
+            description: p.description || '',
+            price: p.price,
+            comparePrice: p.discount !== undefined ? p.price / (1 - (p.discount || 0) / 100) : undefined,
+            rating: p.rating || 0,
+            reviews: 0,
+            images: p.image_url ? [p.image_url] : ['https://via.placeholder.com/600'],
+            category: p.category,
+            tags: [p.category],
+            sku: p.id.slice(0, 12).toUpperCase(),
+            inStock: p.stock > 0,
+          }));
+          setRelated(mapped);
+        } catch {}
+      } catch (error) {
+        console.error('Error refreshing product:', error);
+      }
+    };
+
+    window.addEventListener('productsUpdated', handleProductUpdate);
+    
+    return () => {
+      window.removeEventListener('productsUpdated', handleProductUpdate);
+    };
+  }, [id, navigate]);
+
+  // Realtime: refresh related when products in the same category change
+  useRealtime<any>({
+    table: 'products',
+    events: ['INSERT', 'UPDATE', 'DELETE'],
+    onEvent: async () => {
+      if (!product) return;
+      try {
+        const rel = await productService.getAllProducts({ category: product.category });
+        const relatedFiltered = (rel || []).filter(p => p.id !== product.id).slice(0, 4);
+        const mapped = relatedFiltered.map(p => ({
+          id: p.id,
+          name: p.name,
+          description: p.description || '',
+          price: p.price,
+          comparePrice: p.discount !== undefined ? p.price / (1 - (p.discount || 0) / 100) : undefined,
+          rating: p.rating || 0,
+          reviews: 0,
+          images: p.image_url ? [p.image_url] : ['https://via.placeholder.com/600'],
+          category: p.category,
+          tags: [p.category],
+          sku: p.id.slice(0, 12).toUpperCase(),
+          inStock: p.stock > 0,
+        }));
+        setRelated(mapped);
+      } catch {}
+    },
+    channelName: 'product-detail-related',
+  });
 
   const handleAddToCart = () => {
     if (!product) return;
@@ -99,11 +223,16 @@ const ProductDetail: React.FC = () => {
       categoryName: product.category,
       stock: 100
     }, quantity);
+    // Show toast with total based on selected quantity
+    toast.addedToCart(product.name, product.price * quantity, quantity);
   };
 
   const discount = product?.comparePrice 
     ? Math.round(((product.comparePrice - product.price) / product.comparePrice) * 100)
     : 0;
+
+  const currentTotal = product ? product.price * quantity : 0;
+  const originalTotal = product?.comparePrice ? product.comparePrice * quantity : undefined;
 
   if (loading) return <LoadingContainer>Loading...</LoadingContainer>;
   if (!product) return <ErrorContainer>Product not found</ErrorContainer>;
@@ -119,13 +248,13 @@ const ProductDetail: React.FC = () => {
       <ProductSection>
         <ImageGallery>
           <MainImageContainer as={motion.div} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <MainImage src={product.images[selectedImage]} alt={product.name} />
+            <MainImage loading="lazy" src={product.images[selectedImage]} alt={product.name} />
             {discount > 0 && <DiscountBadge>-{discount}%</DiscountBadge>}
           </MainImageContainer>
           <Thumbnails>
             {product.images.map((image, index) => (
               <Thumbnail key={index} $active={selectedImage === index} onClick={() => setSelectedImage(index)}>
-                <img src={image} alt={`${product.name} ${index + 1}`} />
+                <img loading="lazy" src={image} alt={`${product.name} ${index + 1}`} />
               </Thumbnail>
             ))}
           </Thumbnails>
@@ -144,8 +273,8 @@ const ProductDetail: React.FC = () => {
             <RatingText>{product.rating} ({product.reviews} Reviews)</RatingText>
           </RatingContainer>
           <PriceContainer>
-            <CurrentPrice>${product.price.toFixed(2)}</CurrentPrice>
-            {product.comparePrice && <OriginalPrice>${product.comparePrice.toFixed(2)}</OriginalPrice>}
+            <CurrentPrice>{formatCurrency(currentTotal)}</CurrentPrice>
+            {typeof originalTotal === 'number' && <OriginalPrice>{formatCurrency(originalTotal)}</OriginalPrice>}
           </PriceContainer>
           <ProductDescription>{product.description}</ProductDescription>
           
@@ -179,14 +308,7 @@ const ProductDetail: React.FC = () => {
             <MetaItem><MetaLabel>Tags:</MetaLabel><MetaValue>{product.tags.join(', ')}</MetaValue></MetaItem>
           </ProductMeta>
 
-          <ShareSection>
-            <ShareLabel>Share:</ShareLabel>
-            <SocialIcons>
-              {[FiFacebook, FiTwitter, FiInstagram, FiLink].map((Icon, i) => (
-                <SocialIcon key={i}><Icon /></SocialIcon>
-              ))}
-            </SocialIcons>
-          </ShareSection>
+          {/* Share section removed per request */}
         </ProductInfo>
       </ProductSection>
 
@@ -216,18 +338,24 @@ const ProductDetail: React.FC = () => {
       <RelatedSection>
         <SectionTitle>Explore <HighlightText>Related Products</HighlightText></SectionTitle>
         <RelatedGrid>
-          {[1, 2, 3, 4].map((item) => (
-            <RelatedProductCard key={item} onClick={() => navigate(`/products/${item}`)}>
-              <RelatedBadge>25% off</RelatedBadge>
-              <RelatedImage src="https://images.unsplash.com/photo-1464965911861-746a04b4bca6?w=300" alt="Related" />
-              <RelatedInfo>
-                <RelatedCategory>Fruits</RelatedCategory>
-                <RelatedName>Fresh Strawberry</RelatedName>
-                <RelatedRating><FiStar fill="#FFB800" color="#FFB800" /><span>4.8</span></RelatedRating>
-                <RelatedPrice><span className="current">$8.00</span><span className="original">$10.00</span></RelatedPrice>
-              </RelatedInfo>
-            </RelatedProductCard>
-          ))}
+          {related.map((rp) => {
+            const relDiscount = rp.comparePrice ? Math.round(((rp.comparePrice - rp.price) / rp.comparePrice) * 100) : 0;
+            return (
+              <RelatedProductCard key={rp.id} onClick={() => navigate(`/products/${rp.id}`)}>
+                {relDiscount > 0 && <RelatedBadge>-{relDiscount}%</RelatedBadge>}
+                <RelatedImage src={rp.images[0]} alt={rp.name} loading="lazy" />
+                <RelatedInfo>
+                  <RelatedCategory>{rp.category}</RelatedCategory>
+                  <RelatedName>{rp.name}</RelatedName>
+                  {rp.rating > 0 && <RelatedRating><FiStar fill="#FFB800" color="#FFB800" /><span>{rp.rating.toFixed(1)}</span></RelatedRating>}
+                  <RelatedPrice>
+                    <span className="current">{formatCurrency(rp.price)}</span>
+                    {rp.comparePrice && <span className="original">{formatCurrency(rp.comparePrice)}</span>}
+                  </RelatedPrice>
+                </RelatedInfo>
+              </RelatedProductCard>
+            );
+          })}
         </RelatedGrid>
       </RelatedSection>
     </Container>
@@ -275,10 +403,7 @@ const ProductMeta = styled.div`display: flex; flex-direction: column; gap: 0.75r
 const MetaItem = styled.div`display: flex; gap: 0.5rem; font-size: 0.95rem;`;
 const MetaLabel = styled.span`color: #636E72; font-weight: 600; min-width: 80px;`;
 const MetaValue = styled.span`color: #2D3436;`;
-const ShareSection = styled.div`display: flex; align-items: center; gap: 1rem;`;
-const ShareLabel = styled.span`font-weight: 600; color: #2D3436;`;
-const SocialIcons = styled.div`display: flex; gap: 0.75rem;`;
-const SocialIcon = styled.button`width: 40px; height: 40px; border-radius: 50%; border: 1px solid #E1E8ED; background: white; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.3s; &:hover { background: #6C9A7F; color: white; border-color: #6C9A7F; } svg { width: 18px; height: 18px; }`;
+// Share section removed
 const TabsSection = styled.div`margin-bottom: 4rem;`;
 const TabsHeader = styled.div`display: flex; gap: 2rem; border-bottom: 2px solid #E1E8ED; margin-bottom: 2rem; @media (max-width: 768px) { gap: 1rem; }`;
 const Tab = styled.button<{ $active: boolean }>`padding: 1rem 0; background: none; border: none; font-size: 1rem; font-weight: 600; color: ${p => p.$active ? '#6C9A7F' : '#636E72'}; border-bottom: 3px solid ${p => p.$active ? '#6C9A7F' : 'transparent'}; margin-bottom: -2px; cursor: pointer; transition: all 0.3s; &:hover { color: #6C9A7F; }`;

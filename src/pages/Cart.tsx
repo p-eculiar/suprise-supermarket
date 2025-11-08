@@ -1,18 +1,76 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { motion } from 'framer-motion';
 import { useCart } from '../contexts/CartContext';
-import { FiX, FiMinus, FiPlus, FiShoppingBag } from 'react-icons/fi';
+import { useSettings } from '../contexts/SettingsContext';
+import { FiX, FiMinus, FiPlus, FiShoppingBag, FiAlertTriangle } from 'react-icons/fi';
 import { Link, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '../lib/supabase';
+import { calculateShippingFee, isDeliveryAvailable, getCoordinatesForArea } from '../utils/shippingCalculator';
 
 const Cart: React.FC = () => {
   const { cartItems, removeFromCart, updateQuantity, clearCart, getCartTotal } = useCart();
+  const { settings, formatCurrency } = useSettings();
   const [couponCode, setCouponCode] = useState('');
+  const [stockWarnings, setStockWarnings] = useState<{[key: string]: string}>({});
   const navigate = useNavigate();
 
+  // Fetch real-time stock data for cart items
+  const { data: stockData } = useQuery({
+    queryKey: ['cart-stock-validation', cartItems.map(item => item.id)],
+    queryFn: async () => {
+      if (cartItems.length === 0) return {};
+      
+      const productIds = cartItems.map(item => item.id);
+      const { data, error } = await supabase
+        .from('products')
+        .select('id, stock, name, low_stock_threshold')
+        .in('id', productIds);
+      
+      if (error) throw error;
+      
+      const stockMap: {[key: string]: any} = {};
+      data?.forEach(product => {
+        stockMap[product.id] = product;
+      });
+      
+      return stockMap;
+    },
+    enabled: cartItems.length > 0,
+    refetchInterval: 30000, // Refetch every 30 seconds
+  });
+
+  // Check for stock issues and update warnings
+  useEffect(() => {
+    if (!stockData || cartItems.length === 0) {
+      setStockWarnings({});
+      return;
+    }
+
+    const warnings: {[key: string]: string} = {};
+    
+    cartItems.forEach(cartItem => {
+      const productStock = stockData[cartItem.id];
+      if (!productStock) return;
+      
+      if (productStock.stock === 0) {
+        warnings[cartItem.id] = 'Out of stock - item will be removed';
+      } else if (cartItem.quantity > productStock.stock) {
+        warnings[cartItem.id] = `Only ${productStock.stock} available - quantity adjusted`;
+      } else if (productStock.stock <= (productStock.low_stock_threshold || 10)) {
+        warnings[cartItem.id] = `Low stock: ${productStock.stock} remaining`;
+      }
+    });
+    
+    setStockWarnings(warnings);
+  }, [stockData, cartItems]);
+
   const subtotal = getCartTotal();
-  const shipping = subtotal > 50 ? 0 : 5.99;
-  const tax = subtotal * 0.08; // 8% tax
+  // Shipping will be calculated in the checkout process based on location
+  // For now, we'll show 0 and explain that it will be calculated during checkout
+  const shipping = 0;
+  const tax = subtotal * (settings.taxRate / 100);
   const total = subtotal + shipping + tax;
 
   const handleCheckout = () => {
@@ -75,13 +133,19 @@ const Cart: React.FC = () => {
                         <ProductInfo>
                           <ProductName>{item.name}</ProductName>
                           <ProductCategory>{item.categoryName}</ProductCategory>
+                          {stockWarnings[item.id] && (
+                            <StockWarning>
+                              <FiAlertTriangle />
+                              {stockWarnings[item.id]}
+                            </StockWarning>
+                          )}
                         </ProductInfo>
                       </ProductCell>
 
                       <PriceCell>
-                        <Price>${item.price.toFixed(2)}</Price>
+                        <Price>{formatCurrency(item.price)}</Price>
                         {item.originalPrice && item.originalPrice > item.price && (
-                          <OriginalPrice>${item.originalPrice.toFixed(2)}</OriginalPrice>
+                          <OriginalPrice>{formatCurrency(item.originalPrice)}</OriginalPrice>
                         )}
                       </PriceCell>
 
@@ -96,15 +160,20 @@ const Cart: React.FC = () => {
                           <QuantityDisplay>{item.quantity}</QuantityDisplay>
                           <QuantityButton
                             onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                            disabled={item.quantity >= item.stock}
+                            disabled={stockData ? item.quantity >= stockData[item.id]?.stock : item.quantity >= item.stock}
                           >
                             <FiPlus />
                           </QuantityButton>
                         </QuantityControl>
+                        {stockData && stockData[item.id] && (
+                          <StockInfo>
+                            {stockData[item.id].stock} in stock
+                          </StockInfo>
+                        )}
                       </QuantityCell>
 
                       <SubtotalCell>
-                        <Subtotal>${(item.price * item.quantity).toFixed(2)}</Subtotal>
+                        <Subtotal>{formatCurrency(item.price * item.quantity)}</Subtotal>
                       </SubtotalCell>
 
                       <RemoveCell>
@@ -146,34 +215,28 @@ const Cart: React.FC = () => {
                 
                 <SummaryRow>
                   <SummaryLabel>Subtotal:</SummaryLabel>
-                  <SummaryValue>${subtotal.toFixed(2)}</SummaryValue>
+                  <SummaryValue>{formatCurrency(subtotal)}</SummaryValue>
                 </SummaryRow>
 
                 <SummaryRow>
                   <SummaryLabel>Shipping:</SummaryLabel>
-                  <SummaryValue $free={shipping === 0}>
-                    {shipping === 0 ? 'Free' : `$${shipping.toFixed(2)}`}
+                  <SummaryValue>
+                    <div style={{ fontSize: '0.875rem', color: '#636E72', fontWeight: 400, textAlign: 'right', fontStyle: 'italic' }}>
+                      Enter delivery address in checkout to calculate
+                    </div>
                   </SummaryValue>
                 </SummaryRow>
 
-                {shipping === 0 ? (
-                  <ShippingNote>🎉 You've earned free shipping!</ShippingNote>
-                ) : (
-                  <ShippingNote>
-                    Add ${(50 - subtotal).toFixed(2)} more for free shipping
-                  </ShippingNote>
-                )}
-
                 <SummaryRow>
                   <SummaryLabel>Tax (8%):</SummaryLabel>
-                  <SummaryValue>${tax.toFixed(2)}</SummaryValue>
+                  <SummaryValue>{formatCurrency(tax)}</SummaryValue>
                 </SummaryRow>
 
                 <Divider />
 
                 <TotalRow>
                   <TotalLabel>Total:</TotalLabel>
-                  <TotalValue>${total.toFixed(2)}</TotalValue>
+                  <TotalValue>{formatCurrency(total)}</TotalValue>
                 </TotalRow>
 
                 <CheckoutButton onClick={handleCheckout}>
@@ -191,16 +254,23 @@ const Cart: React.FC = () => {
               </SummaryCard>
 
               <PromoCard>
-                <PromoIcon>🚚</PromoIcon>
+                <PromoIcon></PromoIcon>
                 <PromoTitle>Free Shipping</PromoTitle>
-                <PromoText>On orders over $50</PromoText>
+                <PromoText>On orders over {formatCurrency(settings.freeShippingThreshold)}</PromoText>
               </PromoCard>
 
               <PromoCard>
-                <PromoIcon>🔒</PromoIcon>
+                <PromoIcon></PromoIcon>
                 <PromoTitle>Secure Payment</PromoTitle>
                 <PromoText>100% secure transaction</PromoText>
               </PromoCard>
+
+              <PromoCard>
+                <PromoIcon></PromoIcon>
+                <PromoTitle>Location-Based Shipping</PromoTitle>
+                <PromoText>Shipping fees are calculated based on the road distance from our supermarket at 6 Farm Road, Off Ada George, Port Harcourt to your delivery address</PromoText>
+              </PromoCard>
+
             </CartSidebar>
           </CartLayout>
         )}
@@ -395,6 +465,30 @@ const ProductName = styled.div`
 const ProductCategory = styled.div`
   font-size: 0.875rem;
   color: #999;
+`;
+
+const StockWarning = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: #FF9800;
+  margin-top: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  background: #FFF3E0;
+  border-radius: 4px;
+  
+  svg {
+    width: 12px;
+    height: 12px;
+  }
+`;
+
+const StockInfo = styled.div`
+  font-size: 0.75rem;
+  color: #636E72;
+  margin-top: 0.25rem;
+  text-align: center;
 `;
 
 const PriceCell = styled.div`

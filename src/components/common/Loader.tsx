@@ -1,4 +1,4 @@
-import styled, { keyframes } from 'styled-components';
+import styled, { css, keyframes } from 'styled-components';
 
 const spin = keyframes`
   0% { transform: rotate(0deg); }
@@ -12,7 +12,7 @@ const LoaderWrapper = styled.div<{ size?: number; color?: string }>`
   border: 3px solid rgba(0, 0, 0, 0.1);
   border-radius: 50%;
   border-top-color: ${({ theme, color }) => color || theme.colors?.primary?.main || '#007bff'};
-  animation: ${spin} 1s ease-in-out infinite;
+  animation: ${css`${spin} 1s ease-in-out infinite`};
 `;
 
 interface LoaderProps {

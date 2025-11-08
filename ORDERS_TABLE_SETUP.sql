@@ -1,70 +1,51 @@
 -- =====================================================
--- ORDERS & PAYMENTS TABLES FOR SURPRISE SUPERMARKET
+-- ORDERS AND PAYMENT TABLES SETUP
 -- =====================================================
+-- Run this in Supabase SQL Editor to create orders and payment tables
 
--- 0. DROP EXISTING TABLES (IF YOU WANT FRESH START)
--- Uncomment these lines if you want to recreate tables from scratch
--- DROP TABLE IF EXISTS public.payment_transactions CASCADE;
--- DROP TABLE IF EXISTS public.order_items CASCADE;
--- DROP TABLE IF EXISTS public.orders CASCADE;
-
--- 1. CREATE ORDERS TABLE
+-- 1. CREATE ORDERS TABLE (if not exists)
 CREATE TABLE IF NOT EXISTS public.orders (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-    
-    -- Order Details
-    order_number VARCHAR(50) UNIQUE NOT NULL,
-    status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'confirmed', 'shipped', 'delivered', 'cancelled', 'refunded')),
+    order_number VARCHAR(50) UNIQUE,
     
     -- Customer Information
     customer_name VARCHAR(255) NOT NULL,
     customer_email VARCHAR(255) NOT NULL,
-    customer_phone VARCHAR(50),
+    customer_phone VARCHAR(20),
+    customer_address TEXT,
     
-    -- Delivery Address
-    delivery_address TEXT NOT NULL,
-    delivery_city VARCHAR(100),
-    delivery_state VARCHAR(100),
-    delivery_postal_code VARCHAR(20),
-    delivery_notes TEXT,
-    
-    -- Order Totals
+    -- Order Details
+    items JSONB,
     subtotal DECIMAL(10, 2) NOT NULL,
-    tax DECIMAL(10, 2) DEFAULT 0,
-    delivery_fee DECIMAL(10, 2) DEFAULT 0,
-    discount DECIMAL(10, 2) DEFAULT 0,
-    total DECIMAL(10, 2) NOT NULL,
+    tax_amount DECIMAL(10, 2) DEFAULT 0,
+    shipping_amount DECIMAL(10, 2) DEFAULT 0,
+    discount_amount DECIMAL(10, 2) DEFAULT 0,
+    total_amount DECIMAL(10, 2) NOT NULL,
     
-    -- Payment Information
-    payment_method VARCHAR(50) DEFAULT 'paystack',
+    -- Status Tracking
+    status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded')),
     payment_status VARCHAR(50) DEFAULT 'pending' CHECK (payment_status IN ('pending', 'paid', 'failed', 'refunded')),
-    payment_reference VARCHAR(255),
-    paystack_reference VARCHAR(255),
+    
+    -- Delivery Information
+    delivery_method VARCHAR(50) DEFAULT 'standard',
+    delivery_address TEXT,
+    delivery_date DATE,
     
     -- Timestamps
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    paid_at TIMESTAMP WITH TIME ZONE,
-    delivered_at TIMESTAMP WITH TIME ZONE
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 2. CREATE ORDER ITEMS TABLE
+-- 2. CREATE ORDER ITEMS TABLE (if not exists)
 CREATE TABLE IF NOT EXISTS public.order_items (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     order_id UUID REFERENCES public.orders(id) ON DELETE CASCADE,
-    
-    -- Product Information (stored for historical record)
     product_id UUID REFERENCES public.products(id),
     product_name VARCHAR(255) NOT NULL,
-    product_image_url TEXT,
-    
-    -- Pricing
-    price DECIMAL(10, 2) NOT NULL,
     quantity INTEGER NOT NULL,
-    subtotal DECIMAL(10, 2) NOT NULL,
-    
-    -- Timestamps
+    price DECIMAL(10, 2) NOT NULL,
+    total DECIMAL(10, 2) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -115,13 +96,22 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- 6. CREATE TRIGGERS FOR AUTO-UPDATING TIMESTAMPS
+-- Drop existing triggers first
 DROP TRIGGER IF EXISTS update_orders_updated_at ON public.orders;
+DROP TRIGGER IF EXISTS update_order_items_updated_at ON public.order_items;
+DROP TRIGGER IF EXISTS update_payment_transactions_updated_at ON public.payment_transactions;
+
+-- Create new triggers
 CREATE TRIGGER update_orders_updated_at
     BEFORE UPDATE ON public.orders
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
-DROP TRIGGER IF EXISTS update_payment_transactions_updated_at ON public.payment_transactions;
+CREATE TRIGGER update_order_items_updated_at
+    BEFORE UPDATE ON public.order_items
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
 CREATE TRIGGER update_payment_transactions_updated_at
     BEFORE UPDATE ON public.payment_transactions
     FOR EACH ROW
@@ -137,31 +127,41 @@ ALTER TABLE public.payment_transactions ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Users can view their own orders" ON public.orders;
 DROP POLICY IF EXISTS "Users can create their own orders" ON public.orders;
 DROP POLICY IF EXISTS "Users can update their own pending orders" ON public.orders;
+DROP POLICY IF EXISTS "Admins can view all orders" ON public.orders;
 
--- Users can view their own orders
+-- Create new policies
 CREATE POLICY "Users can view their own orders"
     ON public.orders
     FOR SELECT
     USING (auth.uid() = user_id);
 
--- Users can create their own orders
 CREATE POLICY "Users can create their own orders"
     ON public.orders
     FOR INSERT
     WITH CHECK (auth.uid() = user_id);
 
--- Users can update their own pending orders
 CREATE POLICY "Users can update their own pending orders"
     ON public.orders
     FOR UPDATE
     USING (auth.uid() = user_id AND status = 'pending');
 
+CREATE POLICY "Admins can view all orders"
+    ON public.orders
+    FOR SELECT
+    USING (
+        EXISTS (
+            SELECT 1 FROM profiles 
+            WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
+
 -- 9. CREATE RLS POLICIES FOR ORDER ITEMS
 -- Drop existing policies first
 DROP POLICY IF EXISTS "Users can view their own order items" ON public.order_items;
 DROP POLICY IF EXISTS "Users can insert their own order items" ON public.order_items;
+DROP POLICY IF EXISTS "Admins can view all order items" ON public.order_items;
 
--- Users can view order items for their own orders
+-- Create new policies
 CREATE POLICY "Users can view their own order items"
     ON public.order_items
     FOR SELECT
@@ -173,7 +173,6 @@ CREATE POLICY "Users can view their own order items"
         )
     );
 
--- Users can insert order items for their own orders
 CREATE POLICY "Users can insert their own order items"
     ON public.order_items
     FOR INSERT
@@ -185,12 +184,23 @@ CREATE POLICY "Users can insert their own order items"
         )
     );
 
+CREATE POLICY "Admins can view all order items"
+    ON public.order_items
+    FOR SELECT
+    USING (
+        EXISTS (
+            SELECT 1 FROM profiles 
+            WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
+
 -- 10. CREATE RLS POLICIES FOR PAYMENT TRANSACTIONS
 -- Drop existing policies first
 DROP POLICY IF EXISTS "Users can view their own payment transactions" ON public.payment_transactions;
 DROP POLICY IF EXISTS "Users can insert their own payment transactions" ON public.payment_transactions;
+DROP POLICY IF EXISTS "Admins can view all payment transactions" ON public.payment_transactions;
 
--- Users can view transactions for their own orders
+-- Create new policies
 CREATE POLICY "Users can view their own payment transactions"
     ON public.payment_transactions
     FOR SELECT
@@ -202,7 +212,6 @@ CREATE POLICY "Users can view their own payment transactions"
         )
     );
 
--- Users can insert transactions for their own orders
 CREATE POLICY "Users can insert their own payment transactions"
     ON public.payment_transactions
     FOR INSERT
@@ -211,6 +220,16 @@ CREATE POLICY "Users can insert their own payment transactions"
             SELECT 1 FROM public.orders
             WHERE orders.id = payment_transactions.order_id
             AND orders.user_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Admins can view all payment transactions"
+    ON public.payment_transactions
+    FOR SELECT
+    USING (
+        EXISTS (
+            SELECT 1 FROM profiles 
+            WHERE id = auth.uid() AND role = 'admin'
         )
     );
 

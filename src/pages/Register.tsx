@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import styled from 'styled-components';
 import { useAuth } from '../contexts/AuthContext';
+import { toast } from '../components/common/Toast';
 import { FiMail, FiLock, FiAlertCircle, FiShoppingBag, FiUser } from 'react-icons/fi';
 
 const RegisterPage: React.FC = () => {
@@ -14,15 +15,64 @@ const RegisterPage: React.FC = () => {
   const [emailNotifications, setEmailNotifications] = useState(true); // Default to opted-in
   const navigate = useNavigate();
 
+  // Validation states
+  const [passwordValid, setPasswordValid] = useState(true);
+  const [confirmPasswordValid, setConfirmPasswordValid] = useState(true);
+  const [termsAccepted, setTermsAccepted] = useState(true);
+
+  // Password validation function
+  const validatePassword = (password: string) => {
+    const isLengthValid = password.length >= 8;
+    const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+/.test(password);
+    return isLengthValid && hasSpecialChar;
+  };
+
+  // Handle password change with validation
+  const handlePasswordChange = (password: string) => {
+    setFormData({ ...formData, password });
+    setPasswordValid(validatePassword(password));
+    
+    // Also validate confirm password if it exists
+    if (formData.confirmPassword) {
+      setConfirmPasswordValid(password === formData.confirmPassword);
+    }
+  };
+
+  // Handle confirm password change with validation
+  const handleConfirmPasswordChange = (confirmPassword: string) => {
+    setFormData({ ...formData, confirmPassword });
+    setConfirmPasswordValid(formData.password === confirmPassword);
+  };
+
+  // Handle terms acceptance
+  const handleTermsChange = (accepted: boolean) => {
+    setAcceptTerms(accepted);
+    setTermsAccepted(accepted);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (formData.password !== formData.confirmPassword) {
+    // Final validation
+    const isPasswordValid = validatePassword(formData.password);
+    const isConfirmPasswordValid = formData.password === formData.confirmPassword;
+    const areTermsAccepted = acceptTerms;
+    
+    setPasswordValid(isPasswordValid);
+    setConfirmPasswordValid(isConfirmPasswordValid);
+    setTermsAccepted(areTermsAccepted);
+    
+    if (!isPasswordValid) {
+      setError('Password must be at least 8 characters long and contain special characters');
+      return;
+    }
+    
+    if (!isConfirmPasswordValid) {
       setError('Passwords do not match');
       return;
     }
     
-    if (!acceptTerms) {
+    if (!areTermsAccepted) {
       setError('Please accept the terms and conditions');
       return;
     }
@@ -30,13 +80,30 @@ const RegisterPage: React.FC = () => {
     try {
       setError(null);
       setIsLoading(true);
+      // Just register the user, don't automatically log them in
       await registerUser(formData.name, formData.email, formData.password, emailNotifications);
-      navigate('/');
+      
+      // Show success message and redirect to verification page
+      toast.success('Account created successfully! Please check your email to verify your account.');
+      navigate('/verify-email');
     } catch (err: any) {
       setError(err.message || 'Registration failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Check if all fields are valid for enabling submit button
+  const isFormValid = () => {
+    return (
+      formData.name.trim() !== '' &&
+      formData.email.trim() !== '' &&
+      formData.password.trim() !== '' &&
+      formData.confirmPassword.trim() !== '' &&
+      passwordValid &&
+      confirmPasswordValid &&
+      acceptTerms
+    );
   };
 
   return (
@@ -130,16 +197,20 @@ const RegisterPage: React.FC = () => {
                   type={showPassword ? 'text' : 'password'}
                   placeholder="Create a strong password"
                   value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  onChange={(e) => handlePasswordChange(e.target.value)}
                   required
                   disabled={isLoading}
-                  minLength={6}
+                  style={{
+                    borderColor: !passwordValid && formData.password ? '#E74C3C' : undefined
+                  }}
                 />
                 <ShowPasswordBtn type="button" onClick={() => setShowPassword(!showPassword)}>
                   {showPassword ? 'Hide' : 'Show'}
                 </ShowPasswordBtn>
               </InputWrapper>
-              <PasswordHint>Must be at least 6 characters</PasswordHint>
+              <PasswordHint style={{ color: !passwordValid && formData.password ? '#E74C3C' : undefined }}>
+                Must be at least 8 characters with special characters
+              </PasswordHint>
             </FormGroup>
 
             <FormGroup>
@@ -152,20 +223,27 @@ const RegisterPage: React.FC = () => {
                   type={showPassword ? 'text' : 'password'}
                   placeholder="Re-enter your password"
                   value={formData.confirmPassword}
-                  onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                  onChange={(e) => handleConfirmPasswordChange(e.target.value)}
                   required
                   disabled={isLoading}
-                  minLength={6}
+                  style={{
+                    borderColor: !confirmPasswordValid && formData.confirmPassword ? '#E74C3C' : undefined
+                  }}
                 />
               </InputWrapper>
+              {formData.confirmPassword && !confirmPasswordValid && (
+                <PasswordHint style={{ color: '#E74C3C' }}>
+                  Passwords do not match
+                </PasswordHint>
+              )}
             </FormGroup>
 
             <TermsCheckbox>
-              <CheckboxLabel>
+              <CheckboxLabel style={{ color: !termsAccepted && !acceptTerms ? '#E74C3C' : undefined }}>
                 <input 
                   type="checkbox" 
                   checked={acceptTerms}
-                  onChange={(e) => setAcceptTerms(e.target.checked)}
+                  onChange={(e) => handleTermsChange(e.target.checked)}
                 />
                 <span>
                   I agree to the <TermsLink to="/terms">Terms of Service</TermsLink> and{' '}
@@ -187,27 +265,14 @@ const RegisterPage: React.FC = () => {
               </CheckboxLabel>
             </NotificationCheckbox>
 
-            <SubmitButton type="submit" disabled={isLoading}>
+            <SubmitButton 
+              type="submit" 
+              disabled={isLoading || !isFormValid()}
+            >
               {isLoading ? 'Creating Account...' : 'Create Account'}
             </SubmitButton>
 
-            <Divider>
-              <DividerLine />
-              <DividerText>or</DividerText>
-              <DividerLine />
-            </Divider>
-
-            <SocialButtons>
-              <SocialButton type="button">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-                </svg>
-                Sign up with Google
-              </SocialButton>
-            </SocialButtons>
+            {/* Social sign-up removed per request */}
 
             <SignInPrompt>
               Already have an account? <SignInLink to="/login">Sign In</SignInLink>

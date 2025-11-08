@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { EmailNotificationService } from './emailService';
 
 // Types
 export interface ContactFormData {
@@ -8,24 +9,54 @@ export interface ContactFormData {
   message: string;
 }
 
-
-
 // API methods
 export const contactApi = {
   /**
-   * Submit contact form data to the server
+   * Submit contact form data to the server and send email notification
    * @param data Contact form data
    * @returns Promise with success status and message
    */
   submitContactForm: async (data: ContactFormData): Promise<{ success: boolean; message: string }> => {
     try {
-      const { error } = await supabase.from('contacts').insert([data]);
+      // First, save the contact data to the database
+      const { error: insertError } = await supabase.from('contacts').insert([data]);
 
-      if (error) {
-        throw error;
+      if (insertError) {
+        throw insertError;
       }
 
-      return { success: true, message: 'Form submitted successfully!' };
+      // Call the Edge Function directly to send email notification
+      try {
+        console.log('Calling Edge Function to send email notification');
+        
+        const response = await fetch('https://awepkphahdheqomgucby.supabase.co/functions/v1/contact-notification', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.REACT_APP_SUPABASE_ANON_KEY}`
+          },
+          body: JSON.stringify({
+            contact: {
+              ...data,
+              created_at: new Date().toISOString()
+            }
+          })
+        });
+
+        const result = await response.json();
+        console.log('Edge Function response:', result);
+        
+        if (result.success) {
+          console.log('Email notification sent successfully');
+        } else {
+          console.warn('Failed to send email notification:', result.error);
+        }
+      } catch (edgeFunctionError) {
+        console.error('Error calling Edge Function:', edgeFunctionError);
+        // Don't throw here - we still want to consider the form submission successful
+      }
+
+      return { success: true, message: 'Form submitted successfully! We\'ll get back to you soon.' };
     } catch (error: any) {
       console.error('Contact form submission error:', error);
       throw new Error(error.message || 'Failed to submit contact form');
@@ -33,9 +64,12 @@ export const contactApi = {
   },
 };
 
-// Products API
+// Products API with improved error handling
 export const fetchProducts = async (filters?: any): Promise<{ data: any[], count: number }> => {
   try {
+    // Check if we have a valid session before making requests
+    const { data: { session } } = await supabase.auth.getSession();
+    
     let query = supabase.from('products').select('*', { count: 'exact' });
 
     // Featured filter
@@ -100,11 +134,29 @@ export const fetchProducts = async (filters?: any): Promise<{ data: any[], count
 
     const { data, error, count } = await query;
 
-    if (error) throw error;
+    if (error) {
+      console.error('Products API error:', error);
+      // If it's an authentication error, try to refresh the session
+      if (error.message?.includes('jwt expired') || error.message?.includes('Invalid JWT')) {
+        console.log('JWT expired, attempting to refresh session');
+        const { data: { session }, error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError) {
+          console.error('Session refresh failed:', refreshError);
+          throw new Error('Authentication expired. Please refresh the page.');
+        }
+        // Retry the request
+        const retryQuery = supabase.from('products').select('*', { count: 'exact' });
+        // Apply same filters as above...
+        const { data: retryData, error: retryError, count: retryCount } = await retryQuery;
+        if (retryError) throw retryError;
+        return { data: retryData || [], count: retryCount || 0 };
+      }
+      throw error;
+    }
     return { data: data || [], count: count || 0 };
   } catch (error: any) {
     console.error('Failed to fetch products:', error);
-    throw error;
+    throw new Error(error.message || 'Failed to load products. Please refresh the page.');
   }
 };
 

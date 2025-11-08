@@ -1,17 +1,34 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCart } from '../../contexts/CartContext';
+import { useWishlist } from '../../contexts/WishlistContext';
+import { useSettings } from '../../contexts/SettingsContext';
 import { Avatar } from '../common/Avatar';
-import styled from 'styled-components';
+import NotificationBell from '../common/NotificationBell';
+import WishlistIcon from '../common/WishlistIcon';
+import styled, { css, keyframes } from 'styled-components';
 import { FiX, FiShoppingCart } from 'react-icons/fi';
+import { clearCachesForFrontpage, clearCachesForDashboard } from '../../utils/navigationHelpers';
+import { supabase } from '../../lib/supabase';
+import TopHeader from './TopHeader';
 
-const navigation = [
-  { name: 'Home', href: '/' },
-  { name: 'Services', href: '/services' },
-  { name: 'About Us', href: '/about' },
-  { name: 'Categories', href: '/products' },
-  { name: 'Contact', href: '/contact' },
+// Define the NavigationItem interface
+interface NavigationItem {
+  id: string;
+  name: string;
+  href: string;
+  order: number;
+  is_active: boolean;
+}
+
+// Default navigation items as fallback
+const DEFAULT_NAVIGATION_ITEMS: NavigationItem[] = [
+  { id: '1', name: 'Home', href: '/', order: 1, is_active: true },
+  { id: '3', name: 'About Us', href: '/about', order: 3, is_active: true },
+  { id: '4', name: 'Shop', href: '/products', order: 4, is_active: true },
+  { id: '5', name: 'Blog', href: '/blog', order: 5, is_active: true },
+  { id: '7', name: 'Contact', href: '/contact', order: 7, is_active: true },
 ];
 
 // Styled Components
@@ -123,6 +140,23 @@ const CartButton = styled.button`
   }
 `;
 
+const pulse = keyframes`
+  0% { transform: scale(0.8); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+`;
+
+const slideDown = keyframes`
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+`;
+
 const CartBadge = styled.span`
   position: absolute;
   top: -8px;
@@ -138,13 +172,7 @@ const CartBadge = styled.span`
   font-size: 11px;
   font-weight: 600;
   border: 2px solid #2a5040;
-  animation: pulse 0.3s ease;
-
-  @keyframes pulse {
-    0% { transform: scale(0.8); }
-    50% { transform: scale(1.1); }
-    100% { transform: scale(1); }
-  }
+  animation: ${css`${pulse}`} 0.3s ease;
 `;
 
 const CartDropdown = styled.div`
@@ -158,18 +186,7 @@ const CartDropdown = styled.div`
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
   z-index: 1000;
   overflow: hidden;
-  animation: slideDown 0.2s ease;
-
-  @keyframes slideDown {
-    from {
-      opacity: 0;
-      transform: translateY(-10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
+  animation: ${css`${slideDown}`} 0.2s ease;
 
   @media (max-width: 768px) {
     width: 320px;
@@ -454,34 +471,114 @@ const DropdownButton = styled.button`
 `;
 
 export const Header: React.FC = () => {
+  const { settings } = useSettings();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [cartDropdownOpen, setCartDropdownOpen] = useState(false);
-  const { user, logout, isAuthenticated } = useAuth();
+  const [navigationItems, setNavigationItems] = useState<NavigationItem[]>(DEFAULT_NAVIGATION_ITEMS);
+  const { user, logout, isAuthenticated, isLoading } = useAuth();
   const { cartItems, getCartItemsCount, removeFromCart } = useCart();
+  const { wishlistItems } = useWishlist();
   const navigate = useNavigate();
+
+  // Fetch navigation items from database
+  useEffect(() => {
+    const fetchNavigationItems = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('navigation_items')
+          .select('*')
+          .eq('is_active', true)
+          .order('order', { ascending: true });
+
+        if (error) {
+          console.error('Error fetching navigation items:', error);
+          // Use default navigation items as fallback
+          setNavigationItems(DEFAULT_NAVIGATION_ITEMS);
+        } else if (data && data.length > 0) {
+          // Use navigation items from database
+          setNavigationItems(data);
+        } else {
+          // No items found, use default navigation items
+          setNavigationItems(DEFAULT_NAVIGATION_ITEMS);
+        }
+      } catch (error) {
+        console.error('Error fetching navigation items:', error);
+        // Use default navigation items as fallback
+        setNavigationItems(DEFAULT_NAVIGATION_ITEMS);
+      }
+    };
+
+    fetchNavigationItems();
+  }, []);
 
   const toggleMobileMenu = () => {
     setMobileMenuOpen(!mobileMenuOpen);
   };
 
+  // Determine which dashboard to navigate to based on user role
+  const getDashboardPath = () => {
+    // Wait for user data to be fully loaded including role
+    if (!user) {
+      console.log('⚠️ No user data available for dashboard path');
+      return '/dashboard';
+    }
+    
+    console.log('🔍 Determining dashboard path for user:', user.email);
+    console.log('🔍 User role:', user.role);
+    
+    // Check if user has admin role
+    if (user.role === 'admin') {
+      console.log('✅ Redirecting to admin dashboard');
+      return '/admin';
+    }
+    
+    // Fallback to user dashboard
+    console.log('ℹ️ Redirecting to user dashboard');
+    return '/dashboard';
+  };
+
+  // Handle dashboard navigation with proper role check
+  const handleDashboardClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setProfileMenuOpen(false);
+    
+    // If still loading, wait a bit
+    if (isLoading) {
+      console.log('⏳ Auth still loading, waiting...');
+      setTimeout(() => {
+        navigate(getDashboardPath());
+        clearCachesForDashboard();
+      }, 500);
+    } else {
+      navigate(getDashboardPath());
+      clearCachesForDashboard();
+    }
+  };
+
+  // Remove the useEffect that was attempting to redirect on email verification
+  // This is now properly handled by the EmailVerification component
+
   return (
     <HeaderContainer>
       <HeaderInner>
-        <Logo onClick={() => navigate('/')}>
-          <img src="/main-logo.png" alt="Suprise Supermarket" />
+        <Logo onClick={() => { clearCachesForFrontpage(); navigate('/'); }}>
+          <img src="/main-logo.png" alt={settings.siteName} />
         </Logo>
 
         {/* Desktop Navigation */}
         <DesktopNav>
-          {navigation.map((item) => (
-            <NavLink key={item.name} to={item.href}>
+          {navigationItems.map((item) => (
+            <NavLink key={item.id} to={item.href} onClick={clearCachesForFrontpage}>
               {item.name}
             </NavLink>
           ))}
+          <NavLink to="/services">Services</NavLink>
         </DesktopNav>
 
         <RightSection>
+          {isAuthenticated && user && <NotificationBell />}
+          {isAuthenticated && user && <WishlistIcon />}
           <CartContainer>
             <CartButton onClick={() => setCartDropdownOpen(!cartDropdownOpen)}>
               <FiShoppingCart size={20} />
@@ -538,8 +635,15 @@ export const Header: React.FC = () => {
               />
               {profileMenuOpen && (
                 <ProfileDropdown>
-                  <DropdownLink to="/dashboard">Dashboard</DropdownLink>
-                  <DropdownButton onClick={logout}>Logout</DropdownButton>
+                  <DropdownLink 
+                    to="#" 
+                    onClick={handleDashboardClick}
+                  >
+                    Dashboard
+                  </DropdownLink>
+                  <DropdownButton onClick={logout}>
+                    Logout
+                  </DropdownButton>
                 </ProfileDropdown>
               )}
             </ProfileSection>
@@ -567,15 +671,21 @@ export const Header: React.FC = () => {
 
       {/* Mobile Navigation */}
       <MobileMenu $isOpen={mobileMenuOpen}>
-        {navigation.map((item) => (
+        {navigationItems.map((item) => (
           <MobileNavLink
-            key={item.name}
+            key={item.id}
             to={item.href}
-            onClick={() => setMobileMenuOpen(false)}
+            onClick={() => { clearCachesForFrontpage(); setMobileMenuOpen(false); }}
           >
             {item.name}
           </MobileNavLink>
         ))}
+        <MobileNavLink
+          to="/services"
+          onClick={() => { clearCachesForFrontpage(); setMobileMenuOpen(false); }}
+        >
+          Services
+        </MobileNavLink>
       </MobileMenu>
     </HeaderContainer>
   );

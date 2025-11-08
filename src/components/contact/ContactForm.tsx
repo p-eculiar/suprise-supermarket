@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import styled, { keyframes } from 'styled-components';
+import styled, { css, keyframes } from 'styled-components';
 import { Button, Input, Text, Box } from '../common';
 import { FiSend, FiUser, FiMail, FiMessageSquare, FiCheckCircle, FiAlertCircle } from 'react-icons/fi';
 
@@ -259,10 +259,12 @@ const StatusMessage = styled.div<{ success?: boolean }>`
     success ? (theme.colors as any).success.dark : (theme.colors as any).error.dark};
   font-size: 0.9375rem;
   line-height: 1.5;
-  animation: ${keyframes`
-    from { opacity: 0; transform: translateY(-10px); }
-    to { opacity: 1; transform: translateY(0); }
-  `} 0.3s ease-out;
+  animation: ${css`
+    ${keyframes`
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    `} 0.3s ease-out
+  `};
   
   .icon {
     margin-right: 0.75rem;

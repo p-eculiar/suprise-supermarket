@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { useAuth } from '../../contexts/AuthContext';
+import { useSettings } from '../../contexts/SettingsContext';
 import { supabase } from '../../lib/supabase';
 import toast from '../../components/common/Toast';
 import { FiCreditCard, FiDownload, FiCheckCircle, FiXCircle, FiClock, FiDollarSign, FiCalendar } from 'react-icons/fi';
@@ -17,6 +18,7 @@ interface PaymentTransaction {
 
 const Payment: React.FC = () => {
   const { user } = useAuth();
+  const { formatCurrency } = useSettings();
   const [transactions, setTransactions] = useState<PaymentTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTransaction, setSelectedTransaction] = useState<PaymentTransaction | null>(null);
@@ -33,17 +35,38 @@ const Payment: React.FC = () => {
 
     try {
       setLoading(true);
+      // Fetch payment transactions for the user's orders
+      const { data: ordersData, error: ordersError } = await supabase
+        .from('orders')
+        .select('id')
+        .eq('user_id', user.id);
+      
+      if (ordersError) throw ordersError;
+      
+      // If user has no orders, return empty array
+      if (!ordersData || ordersData.length === 0) {
+        setTransactions([]);
+        return;
+      }
+      
+      // Get order IDs
+      const orderIds = ordersData.map(order => order.id);
+      
+      // Fetch payment transactions for these orders
       const { data, error } = await supabase
         .from('payment_transactions')
         .select('*')
-        .eq('user_id', user.id)
+        .in('order_id', orderIds)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       setTransactions(data || []);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading transactions:', error);
-      toast.error('Failed to load payment history');
+      // Only show error toast if it's not a table doesn't exist error
+      if (!error.message.includes('does not exist')) {
+        toast.error('Failed to load payment history');
+      }
       setTransactions([]);
     } finally {
       setLoading(false);
@@ -82,6 +105,7 @@ const Payment: React.FC = () => {
 
   const handleDownloadReceipt = (transaction: PaymentTransaction) => {
     // Generate receipt data
+    const formattedAmount = formatCurrency(transaction.amount);
     const receiptData = `
 SURPRISE SUPERMARKET
 Payment Receipt
@@ -90,7 +114,7 @@ Payment Receipt
 Transaction ID: ${transaction.reference}
 Order ID: ${transaction.order_id}
 Date: ${new Date(transaction.created_at).toLocaleString()}
-Amount: $${transaction.amount.toFixed(2)}
+Amount: ${formattedAmount}
 Payment Method: ${transaction.payment_method}
 Status: ${transaction.status.toUpperCase()}
 
@@ -150,7 +174,7 @@ Thank you for shopping with us!
           </StatIcon>
           <StatInfo>
             <StatLabel>Total Spent</StatLabel>
-            <StatValue>${totalSpent.toFixed(2)}</StatValue>
+            <StatValue>{formatCurrency(totalSpent)}</StatValue>
           </StatInfo>
         </StatCard>
 
@@ -226,7 +250,7 @@ Thank you for shopping with us!
                   <DetailIcon><FiDollarSign /></DetailIcon>
                   <DetailInfo>
                     <DetailLabel>Amount</DetailLabel>
-                    <DetailValue>${transaction.amount.toFixed(2)}</DetailValue>
+                    <DetailValue>{formatCurrency(transaction.amount)}</DetailValue>
                   </DetailInfo>
                 </TransactionDetail>
 
@@ -296,7 +320,7 @@ Thank you for shopping with us!
                 <DetailRow>
                   <DetailLabel>Amount Paid</DetailLabel>
                   <DetailValue style={{ color: '#27AE60', fontWeight: 700 }}>
-                    ${selectedTransaction.amount.toFixed(2)}
+                    {formatCurrency(selectedTransaction.amount)}
                   </DetailValue>
                 </DetailRow>
                 <DetailRow>

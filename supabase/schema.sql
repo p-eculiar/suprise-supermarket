@@ -33,12 +33,32 @@ CREATE TABLE IF NOT EXISTS products (
 CREATE TABLE IF NOT EXISTS orders (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  order_number TEXT UNIQUE,
   customer_name TEXT NOT NULL,
   customer_email TEXT NOT NULL,
-  total_amount DECIMAL(10, 2) NOT NULL,
-  platform_fee DECIMAL(10, 2) NOT NULL DEFAULT 0,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'cancelled')),
-  payment_method TEXT NOT NULL,
+  customer_phone TEXT,
+  delivery_address TEXT,
+  delivery_city TEXT,
+  delivery_state TEXT,
+  delivery_postal_code TEXT,
+  delivery_notes TEXT,
+  subtotal DECIMAL(10, 2),
+  tax DECIMAL(10, 2),
+  delivery_fee DECIMAL(10, 2),
+  discount DECIMAL(10, 2),
+  total DECIMAL(10, 2) NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'cancelled', 'confirmed', 'shipped', 'delivered')),
+  payment_status TEXT NOT NULL DEFAULT 'pending' CHECK (payment_status IN ('pending', 'paid', 'failed')),
+  payment_method TEXT,
+  paystack_reference TEXT,
+  paid_at TIMESTAMP WITH TIME ZONE,
+  approved_at TIMESTAMP WITH TIME ZONE,
+  approved_by UUID REFERENCES auth.users(id),
+  approval_status TEXT DEFAULT 'pending' CHECK (approval_status IN ('pending', 'approved', 'rejected')),
+  approval_notes TEXT,
+  driver_id UUID REFERENCES auth.users(id),
+  delivered_at TIMESTAMP WITH TIME ZONE,
+  bank_transfer_details JSONB,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -95,8 +115,54 @@ CREATE TABLE IF NOT EXISTS platform_settings (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Create invoices table
+CREATE TABLE IF NOT EXISTS invoices (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  order_id UUID REFERENCES orders(id) ON DELETE CASCADE,
+  invoice_number TEXT UNIQUE NOT NULL,
+  customer_name TEXT NOT NULL,
+  customer_email TEXT NOT NULL,
+  customer_phone TEXT,
+  billing_address TEXT,
+  shipping_address TEXT,
+  items JSONB NOT NULL,
+  subtotal DECIMAL(10, 2) NOT NULL,
+  tax DECIMAL(10, 2) NOT NULL,
+  delivery_fee DECIMAL(10, 2) NOT NULL,
+  discount DECIMAL(10, 2) NOT NULL,
+  total DECIMAL(10, 2) NOT NULL,
+  payment_method TEXT,
+  payment_status TEXT,
+  order_date TIMESTAMP WITH TIME ZONE NOT NULL,
+  due_date TIMESTAMP WITH TIME ZONE NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'paid', 'overdue', 'cancelled')),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create receipts table
+CREATE TABLE IF NOT EXISTS receipts (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  order_id UUID REFERENCES orders(id) ON DELETE CASCADE,
+  receipt_number TEXT UNIQUE NOT NULL,
+  customer_name TEXT NOT NULL,
+  customer_email TEXT NOT NULL,
+  items JSONB NOT NULL,
+  subtotal DECIMAL(10, 2) NOT NULL,
+  tax DECIMAL(10, 2) NOT NULL,
+  delivery_fee DECIMAL(10, 2) NOT NULL,
+  discount DECIMAL(10, 2) NOT NULL,
+  total DECIMAL(10, 2) NOT NULL,
+  payment_method TEXT,
+  payment_status TEXT,
+  payment_date TIMESTAMP WITH TIME ZONE NOT NULL,
+  transaction_reference TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Create indexes for better performance
-CREATE INDEX idx_products_category ON products(category);
+CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
 CREATE INDEX idx_products_status ON products(status);
 CREATE INDEX idx_orders_user_id ON orders(user_id);
 CREATE INDEX idx_orders_status ON orders(status);
@@ -105,6 +171,10 @@ CREATE INDEX idx_order_items_order_id ON order_items(order_id);
 CREATE INDEX idx_order_items_product_id ON order_items(product_id);
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_role ON users(role);
+CREATE INDEX IF NOT EXISTS idx_invoices_order_id ON invoices(order_id);
+CREATE INDEX IF NOT EXISTS idx_receipts_order_id ON receipts(order_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_invoice_number ON invoices(invoice_number);
+CREATE INDEX IF NOT EXISTS idx_receipts_receipt_number ON receipts(receipt_number);
 
 -- Create updated_at trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -248,6 +318,180 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES ('product-images', 'product-images', true)
 ON CONFLICT DO NOTHING;
 
+-- Create notifications table
+CREATE TABLE IF NOT EXISTS notifications (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    type TEXT NOT NULL CHECK (type IN ('order', 'product', 'promotion', 'system')),
+    read BOOLEAN DEFAULT FALSE,
+    data JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create inventory_alerts table
+CREATE TABLE IF NOT EXISTS inventory_alerts (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    product_id UUID REFERENCES products(id) ON DELETE CASCADE,
+    product_name TEXT NOT NULL,
+    current_stock INTEGER NOT NULL,
+    threshold INTEGER NOT NULL,
+    alert_type TEXT NOT NULL CHECK (alert_type IN ('low_stock', 'out_of_stock', 'overstock')),
+    resolved BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create stock_movements table
+CREATE TABLE IF NOT EXISTS stock_movements (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    product_id UUID REFERENCES products(id) ON DELETE CASCADE,
+    previous_stock INTEGER,
+    new_stock INTEGER NOT NULL,
+    movement_type TEXT NOT NULL CHECK (movement_type IN ('in', 'out', 'adjustment')),
+    quantity INTEGER NOT NULL,
+    reason TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create order_tracking_events table
+CREATE TABLE IF NOT EXISTS order_tracking_events (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    order_id UUID REFERENCES orders(id) ON DELETE CASCADE,
+    status TEXT NOT NULL CHECK (status IN ('pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered', 'cancelled')),
+    location JSONB,
+    description TEXT NOT NULL,
+    estimated_delivery TIMESTAMP WITH TIME ZONE,
+    driver_info JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create driver_locations table
+CREATE TABLE IF NOT EXISTS driver_locations (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    driver_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    latitude DECIMAL(10, 8) NOT NULL,
+    longitude DECIMAL(11, 8) NOT NULL,
+    address TEXT,
+    timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(driver_id)
+);
+
+-- Create delivery_routes table
+CREATE TABLE IF NOT EXISTS delivery_routes (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    driver_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    route_data JSONB NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(driver_id)
+);
+
+-- Add columns to existing tables
+ALTER TABLE products ADD COLUMN IF NOT EXISTS low_stock_threshold INTEGER DEFAULT 10;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS reorder_point INTEGER DEFAULT 5;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS reorder_quantity INTEGER DEFAULT 50;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS supplier TEXT;
+
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS driver_id UUID REFERENCES auth.users(id);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP WITH TIME ZONE;
+
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS email_notifications BOOLEAN DEFAULT TRUE;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS push_notifications BOOLEAN DEFAULT TRUE;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS order_updates BOOLEAN DEFAULT TRUE;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS product_alerts BOOLEAN DEFAULT TRUE;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS promotions BOOLEAN DEFAULT TRUE;
+
+-- Create indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(read);
+CREATE INDEX IF NOT EXISTS idx_inventory_alerts_resolved ON inventory_alerts(resolved);
+CREATE INDEX IF NOT EXISTS idx_stock_movements_product_id ON stock_movements(product_id);
+CREATE INDEX IF NOT EXISTS idx_order_tracking_events_order_id ON order_tracking_events(order_id);
+CREATE INDEX IF NOT EXISTS idx_driver_locations_driver_id ON driver_locations(driver_id);
+
+-- Create RLS policies for new tables
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE inventory_alerts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE stock_movements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE order_tracking_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE driver_locations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE delivery_routes ENABLE ROW LEVEL SECURITY;
+
+-- Notifications policies
+CREATE POLICY "Users can view their own notifications" ON notifications
+    FOR SELECT USING (user_id = auth.uid());
+
+CREATE POLICY "Users can update their own notifications" ON notifications
+    FOR UPDATE USING (user_id = auth.uid());
+
+CREATE POLICY "Admins can view all notifications" ON notifications
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('admin', 'super_admin')
+        )
+    );
+
+CREATE POLICY "Admins can update all notifications" ON notifications
+    FOR UPDATE USING (
+        EXISTS (
+            SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('admin', 'super_admin')
+        )
+    );
+
+-- Inventory alerts policies (admin only)
+CREATE POLICY "Admins can manage inventory alerts" ON inventory_alerts
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('admin', 'super_admin')
+        )
+    );
+
+-- Stock movements policies (admin only)
+CREATE POLICY "Admins can manage stock movements" ON stock_movements
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('admin', 'super_admin')
+        )
+    );
+
+-- Order tracking policies
+CREATE POLICY "Users can view their order tracking" ON order_tracking_events
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM orders WHERE id = order_tracking_events.order_id AND user_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Admins can manage order tracking" ON order_tracking_events
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('admin', 'super_admin', 'driver')
+        )
+    );
+
+-- Driver locations policies
+CREATE POLICY "Drivers can manage their own location" ON driver_locations
+    FOR ALL USING (driver_id = auth.uid());
+
+CREATE POLICY "Admins can view all driver locations" ON driver_locations
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('admin', 'super_admin')
+        )
+    );
+
+-- Delivery routes policies
+CREATE POLICY "Drivers can manage their own routes" ON delivery_routes
+    FOR ALL USING (driver_id = auth.uid());
+
+CREATE POLICY "Admins can view all delivery routes" ON delivery_routes
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('admin', 'super_admin')
+        )
+    );
+
 -- Create storage policy
 CREATE POLICY "Anyone can view product images" ON storage.objects
   FOR SELECT USING (bucket_id = 'product-images');
@@ -255,6 +499,40 @@ CREATE POLICY "Anyone can view product images" ON storage.objects
 CREATE POLICY "Admins can upload product images" ON storage.objects
   FOR INSERT WITH CHECK (
     bucket_id = 'product-images' AND
+    EXISTS (
+      SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+-- Enable Row Level Security (RLS) for document tables
+ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE receipts ENABLE ROW LEVEL SECURITY;
+
+-- Create policies for invoices
+CREATE POLICY "Users can view their own invoices" ON invoices
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM orders WHERE id = invoices.order_id AND user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Admins can view all invoices" ON invoices
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+-- Create policies for receipts
+CREATE POLICY "Users can view their own receipts" ON receipts
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM orders WHERE id = receipts.order_id AND user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Admins can view all receipts" ON receipts
+  FOR SELECT USING (
     EXISTS (
       SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin'
     )

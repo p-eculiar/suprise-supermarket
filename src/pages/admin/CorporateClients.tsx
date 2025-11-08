@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import styled from 'styled-components';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
+import { useRealtime } from '../../hooks/useRealtime';
 import {
   FiBriefcase,
   FiCheckCircle,
@@ -10,6 +11,7 @@ import {
   FiPackage,
   FiSearch,
   FiEye,
+  FiRefreshCw
 } from 'react-icons/fi';
 
 interface CorporateClient {
@@ -34,7 +36,7 @@ const CorporateClients: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
 
   // Fetch corporate clients
-  const { data: clients, isLoading } = useQuery({
+  const { data: clients, isLoading, refetch } = useQuery({
     queryKey: ['corporate-clients', searchTerm, filterStatus],
     queryFn: async () => {
       let query = supabase.from('corporate_clients').select('*');
@@ -51,6 +53,16 @@ const CorporateClients: React.FC = () => {
       if (error) throw error;
       return data as CorporateClient[];
     },
+  });
+
+  // Realtime: refresh clients on changes
+  useRealtime({
+    table: 'corporate_clients',
+    events: ['INSERT', 'UPDATE', 'DELETE'],
+    onEvent: () => {
+      queryClient.invalidateQueries({ queryKey: ['corporate-clients'] });
+    },
+    channelName: 'corporate-clients-realtime',
   });
 
   // Statistics
@@ -103,6 +115,11 @@ const CorporateClients: React.FC = () => {
     }
   };
 
+  // Add refresh function
+  const handleRefresh = () => {
+    refetch();
+  };
+
   return (
     <Container>
       <Header>
@@ -110,6 +127,12 @@ const CorporateClients: React.FC = () => {
           <Title>Corporate Clients</Title>
           <Subtitle>Manage B2B customers and wholesale accounts</Subtitle>
         </HeaderContent>
+        <HeaderActions>
+          <RefreshButton onClick={handleRefresh}>
+            <FiRefreshCw />
+            Refresh
+          </RefreshButton>
+        </HeaderActions>
       </Header>
 
       {/* Statistics */}
@@ -275,6 +298,34 @@ const Title = styled.h1`
 const Subtitle = styled.p`
   color: #666;
   font-size: 0.95rem;
+`;
+
+const HeaderActions = styled.div`
+  display: flex;
+  gap: 1rem;
+`;
+
+const RefreshButton = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  background: white;
+  border: 1px solid #E1E8ED;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    border-color: #6C9A7F;
+    color: #6C9A7F;
+  }
+  
+  svg {
+    width: 18px;
+    height: 18px;
+  }
 `;
 
 const StatsGrid = styled.div`

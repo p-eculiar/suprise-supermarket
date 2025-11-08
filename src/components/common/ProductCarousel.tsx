@@ -6,6 +6,7 @@ import 'swiper/css';
 import 'swiper/css/navigation';
 import 'swiper/css/pagination';
 import { useNavigate } from 'react-router-dom';
+import { useSettings } from '../../contexts/SettingsContext';
 
 interface Product {
   id: string;
@@ -27,6 +28,7 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
   autoplay = true,
 }) => {
   const navigate = useNavigate();
+  const { formatCurrency } = useSettings();
 
   return (
     <CarouselContainer>
@@ -50,7 +52,7 @@ export const ProductCarousel: React.FC<ProductCarouselProps> = ({
               <ProductInfo>
                 {product.categoryName && <ProductCategory>{product.categoryName}</ProductCategory>}
                 <ProductName>{product.name}</ProductName>
-                <ProductPrice>${product.price.toFixed(2)}</ProductPrice>
+                <ProductPrice>{formatCurrency(product.price)}</ProductPrice>
               </ProductInfo>
             </ProductCard>
           </SwiperSlide>

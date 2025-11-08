@@ -19,6 +19,9 @@ export interface DeliveryTracking {
   tracking_history: DeliveryLocation[];
   created_at: string;
   updated_at: string;
+  last_location_update?: string;
+  location_accuracy?: number;
+  delivery_eta?: string;
 }
 
 export class DeliveryTrackingService {

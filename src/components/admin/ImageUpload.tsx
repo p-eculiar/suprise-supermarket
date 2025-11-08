@@ -95,6 +95,8 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+    // Notify parent that image has been removed
+    onImageUploaded('');
   };
 
   const handleButtonClick = () => {

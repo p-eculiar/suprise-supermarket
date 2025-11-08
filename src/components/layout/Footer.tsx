@@ -2,9 +2,12 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import styled from 'styled-components';
 import { FaFacebookF, FaTwitter, FaInstagram, FaPinterestP, FaMapMarkerAlt, FaPhoneAlt, FaEnvelope } from 'react-icons/fa';
+import { useSettings } from '../../contexts/SettingsContext';
+import toast from '../common/Toast';
 import { FaCcVisa, FaCcMastercard, FaCcDiscover, FaCcAmex, FaCcPaypal } from 'react-icons/fa';
 
 export const Footer: React.FC = () => {
+  const { settings } = useSettings();
   const currentYear = new Date().getFullYear();
 
   return (
@@ -19,21 +22,25 @@ export const Footer: React.FC = () => {
             </IconWrapper>
             <ContactDetails>
               <ContactLabel>CALL US 24/7</ContactLabel>
-              <ContactValue>(800) 555-0151</ContactValue>
-              <ContactEmail>contact@suprise.com</ContactEmail>
+              <ContactValue as="a" href="tel:+2348084888899">
+                (+234) 8084888899
+              </ContactValue>
+              <ContactEmail as="a" href={`mailto:${settings.supportEmail}`}>
+                {settings.supportEmail}
+              </ContactEmail>
             </ContactDetails>
           </ContactItem>
           
           <StoreAddress>
             <strong>Suprise Supermarket</strong><br />
-            419 State 414 Rte<br />
-            Beaver Dams, New York<br />
-            14812, USA
+            6 Farm Road<br />
+            Off Ada George, Port Harcourt<br />
+            Rivers State, Nigeria
           </StoreAddress>
           
           <StoreHours>
             <strong>Store Hours:</strong><br />
-            8:00am - 10:00pm<br />
+            12:00am - 10:00pm<br />
             Sunday: Closed
           </StoreHours>
         </FooterSection>
@@ -42,7 +49,6 @@ export const Footer: React.FC = () => {
         <FooterSection>
           <SectionTitle>INFORMATION</SectionTitle>
           <FooterLink to="/about">About Us</FooterLink>
-          <FooterLink to="/blog">Blog</FooterLink>
           <FooterLink to="/checkout">Checkout</FooterLink>
           <FooterLink to="/contact">Contact</FooterLink>
           <FooterLink to="/services">Service</FooterLink>
@@ -79,16 +85,16 @@ export const Footer: React.FC = () => {
           
           <SectionTitle style={{marginTop: '1.5rem'}}>FOLLOW US</SectionTitle>
           <SocialIcons>
-            <SocialIcon href="https://facebook.com" aria-label="Facebook">
+            <SocialIcon as="button" onClick={() => toast.info('Links will be added soon')} aria-label="Facebook">
               <FaFacebookF />
             </SocialIcon>
-            <SocialIcon href="https://twitter.com" aria-label="Twitter">
+            <SocialIcon as="button" onClick={() => toast.info('Links will be added soon')} aria-label="Twitter">
               <FaTwitter />
             </SocialIcon>
-            <SocialIcon href="https://instagram.com" aria-label="Instagram">
+            <SocialIcon as="button" onClick={() => toast.info('Links will be added soon')} aria-label="Instagram">
               <FaInstagram />
             </SocialIcon>
-            <SocialIcon href="https://pinterest.com" aria-label="Pinterest">
+            <SocialIcon as="button" onClick={() => toast.info('Links will be added soon')} aria-label="Pinterest">
               <FaPinterestP />
             </SocialIcon>
           </SocialIcons>
@@ -146,6 +152,17 @@ const ContactItem = styled.div`
   display: flex;
   gap: 1rem;
   margin-bottom: 1.5rem;
+  cursor: pointer;
+  text-decoration: none;
+  transition: opacity 0.3s ease;
+  
+  &:hover {
+    opacity: 0.9;
+  }
+  
+  &:active {
+    opacity: 0.7;
+  }
 `;
 
 const IconWrapper = styled.div`
@@ -179,11 +196,27 @@ const ContactValue = styled.div`
   font-weight: 700;
   color: #2D3436;
   margin-bottom: 0.25rem;
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.3s ease;
+  
+  &:hover {
+    color: #2c5f47;
+    text-decoration: underline;
+  }
 `;
 
 const ContactEmail = styled.div`
   font-size: 0.875rem;
   color: #636E72;
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.3s ease;
+  
+  &:hover {
+    color: #2c5f47;
+    text-decoration: underline;
+  }
 `;
 
 const StoreAddress = styled.div`

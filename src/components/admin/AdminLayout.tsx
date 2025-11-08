@@ -1,17 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import { 
   FiHome, FiPackage, FiUsers, FiShoppingCart, FiSettings, 
-  FiTrendingUp, FiMenu, FiX, FiLogOut, FiShoppingBag 
+  FiTrendingUp, FiMenu, FiX, FiLogOut, FiShoppingBag, FiTag,
+  FiPercent, FiUserPlus, FiMail, FiDollarSign, FiImage, FiMessageSquare
 } from 'react-icons/fi';
+import { clearCachesForDashboard } from '../../utils/navigationHelpers';
 
 const AdminLayout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const navigate = useNavigate();
+  const { logout, user } = useAuth();
 
-  const handleLogout = () => {
-    // TODO: Implement logout with Supabase
+  // Clear caches when entering admin dashboard
+  useEffect(() => {
+    clearCachesForDashboard();
+  }, []);
+
+  const handleLogout = async () => {
+    await logout();
     navigate('/login');
   };
 
@@ -21,8 +30,7 @@ const AdminLayout: React.FC = () => {
       <Sidebar $open={sidebarOpen}>
         <SidebarHeader>
           <Logo>
-            <FiShoppingBag />
-            <LogoText>Admin Panel</LogoText>
+            <LogoImage src="/main-logo.png" alt="Surprise Supermarket Logo" />
           </Logo>
           <CloseButton onClick={() => setSidebarOpen(false)}>
             <FiX />
@@ -38,6 +46,10 @@ const AdminLayout: React.FC = () => {
             <FiPackage />
             <span>Products</span>
           </NavItem>
+          <NavItem to="/admin/categories">
+            <FiTag />
+            <span>Categories</span>
+          </NavItem>
           <NavItem to="/admin/orders">
             <FiShoppingCart />
             <span>Orders</span>
@@ -46,9 +58,26 @@ const AdminLayout: React.FC = () => {
             <FiUsers />
             <span>Users</span>
           </NavItem>
-          <NavItem to="/admin/analytics/nigeria">
+          <NavItem to="/admin/deals">
+            <FiPercent />
+            <span>Deals</span>
+          </NavItem>
+          <NavItem to="/admin/banners">
+            <FiImage />
+            <span>Banners</span>
+          </NavItem>
+          <NavItem to="/admin/nigeria-analytics">
             <FiTrendingUp />
             <span>Nigeria Analytics</span>
+          </NavItem>
+          <NavItem to="/admin/social-leads">
+            <FiUsers />
+            <span>Social Leads</span>
+          </NavItem>
+          {/* Enhanced Realtime Data - the fully working version */}
+          <NavItem to="/admin/realtime-data">
+            <FiMessageSquare />
+            <span>Realtime Data</span>
           </NavItem>
           <NavItem to="/admin/settings">
             <FiSettings />
@@ -73,10 +102,18 @@ const AdminLayout: React.FC = () => {
           
           <TopBarRight>
             <AdminProfile>
-              <AdminAvatar>A</AdminAvatar>
+              <AdminAvatar>
+                {user?.avatar_url ? (
+                  <img src={user.avatar_url} alt={user.full_name || 'Admin'} onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }} />
+                ) : (
+                  <span>{user?.full_name?.charAt(0) || user?.email?.charAt(0) || 'A'}</span>
+                )}
+              </AdminAvatar>
               <AdminInfo>
-                <AdminName>Admin User</AdminName>
-                <AdminRole>Super Admin</AdminRole>
+                <AdminName>{user?.full_name || 'Admin User'}</AdminName>
+                <AdminRole>{user?.role === 'admin' ? 'Super Admin' : 'Admin'}</AdminRole>
               </AdminInfo>
             </AdminProfile>
           </TopBarRight>
@@ -125,24 +162,20 @@ const SidebarHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
+  background: #6C9A7F; /* Website's green color */
 `;
 
 const Logo = styled.div`
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  
-  svg {
-    width: 28px;
-    height: 28px;
-    color: #6C9A7F;
-  }
 `;
 
-const LogoText = styled.span`
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #2D3436;
+const LogoImage = styled.img`
+  max-width: 100%;
+  height: auto;
+  max-height: 100px;
+  width: auto;
+  filter: brightness(0) invert(1); /* Make logo white for better contrast on green background */
 `;
 
 const CloseButton = styled.button`
@@ -153,11 +186,11 @@ const CloseButton = styled.button`
   justify-content: center;
   background: none;
   border: none;
-  color: #636E72;
+  color: #ffffff;
   cursor: pointer;
   
   &:hover {
-    color: #2D3436;
+    color:#efefef;
   }
   
   svg {
@@ -252,9 +285,12 @@ const MainContent = styled.main<{ $sidebarOpen: boolean }>`
   flex: 1;
   margin-left: 280px;
   min-height: 100vh;
+  overflow-x: hidden;
+  max-width: calc(100vw - 280px);
   
   @media (max-width: 1024px) {
     margin-left: 0;
+    max-width: 100vw;
   }
 `;
 
@@ -265,7 +301,7 @@ const TopBar = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 2rem;
+  padding: 0 .7rem;
   position: sticky;
   top: 0;
   z-index: 50;
@@ -327,6 +363,20 @@ const AdminAvatar = styled.div`
   align-items: center;
   justify-content: center;
   font-weight: 700;
+  overflow: hidden;
+  flex-shrink: 0;
+  
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  
+  span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
 `;
 
 const AdminInfo = styled.div`
@@ -348,6 +398,8 @@ const AdminRole = styled.div`
 
 const ContentArea = styled.div`
   min-height: calc(100vh - 70px);
+  overflow-x: hidden;
+  max-width: 100%;
 `;
 
 const Overlay = styled.div`

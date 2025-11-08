@@ -165,9 +165,6 @@ const Services: React.FC = () => {
                 </ServiceIconWrapper>
                 <ServiceTitle>{service.title}</ServiceTitle>
                 <ServiceDescription>{service.description}</ServiceDescription>
-                <LearnMoreLink>
-                  Learn More →
-                </LearnMoreLink>
               </ServiceCard>
             ))}
           </ServicesGrid>
@@ -196,7 +193,7 @@ const Services: React.FC = () => {
               <SectionLabel>WHY CHOOSE US</SectionLabel>
               <ColumnTitle>Your Trusted Grocery Partner</ColumnTitle>
               <ColumnText>
-                With over 25 years of experience in the grocery industry, we've built a reputation 
+                With over 7 years of experience in the grocery industry, we've built a reputation 
                 for quality, reliability, and exceptional customer service. Here's why thousands of 
                 customers trust us with their grocery needs:
               </ColumnText>

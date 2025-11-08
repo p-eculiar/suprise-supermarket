@@ -1,286 +1,305 @@
-import React, { useState, useEffect, useRef } from 'react';
-import styled from 'styled-components';
-import { useNavigate } from 'react-router-dom';
-import { FiBell, FiX, FiCheck, FiPackage, FiDollarSign, FiGift } from 'react-icons/fi';
-import { NotificationService, Notification } from '../../services/notificationService';
+import React, { useState, useEffect } from 'react';
+import styled, { keyframes, css } from 'styled-components';
+import { motion, AnimatePresence } from 'framer-motion';
+import { FiBell, FiX, FiCheck, FiTrash2 } from 'react-icons/fi';
 import { useAuth } from '../../contexts/AuthContext';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { notificationService, Notification } from '../../services/notificationService';
 
 const NotificationBell: React.FC = () => {
   const { user } = useAuth();
-  const navigate = useNavigate();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
 
+  // Fetch notifications
+  const { data: notifications = [] } = useQuery({
+    queryKey: ['notifications', user?.id],
+    queryFn: () => notificationService.getUserNotifications(user?.id || '', 10),
+    enabled: !!user?.id,
+  });
+
+  // Fetch unread count
+  const { data: unreadCount = 0 } = useQuery({
+    queryKey: ['unread-count', user?.id],
+    queryFn: () => notificationService.getUnreadCount(user?.id || ''),
+    enabled: !!user?.id,
+    refetchInterval: 30000, // Refetch every 30 seconds
+  });
+
+  // Mark as read mutation
+  const markAsReadMutation = useMutation({
+    mutationFn: notificationService.markAsRead,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['unread-count', user?.id] });
+    },
+  });
+
+  // Mark all as read mutation
+  const markAllAsReadMutation = useMutation({
+    mutationFn: () => notificationService.markAllAsRead(user?.id || ''),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['unread-count', user?.id] });
+    },
+  });
+
+  // Delete notification mutation
+  const deleteNotificationMutation = useMutation({
+    mutationFn: notificationService.deleteNotification,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['unread-count', user?.id] });
+    },
+  });
+
+  // Set up real-time subscription
   useEffect(() => {
-    if (user) {
-      loadNotifications();
-      subscribeToNotifications();
-      
-      // Request permission for browser notifications
-      NotificationService.requestNotificationPermission();
-    }
+    if (!user?.id) return;
 
-    return () => {
-      if (user) {
-        NotificationService.unsubscribeFromNotifications(user.id);
+    const unsubscribe = notificationService.setupNotificationSubscription(
+      user.id,
+      user.role || 'customer',
+      () => {
+        // Refetch notifications when new ones arrive
+        queryClient.invalidateQueries({ queryKey: ['notifications', user.id] });
+        queryClient.invalidateQueries({ queryKey: ['unread-count', user.id] });
       }
-    };
-  }, [user]);
+    );
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
+    return unsubscribe;
+  }, [user?.id, user?.role, queryClient]);
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const loadNotifications = async () => {
-    if (!user) return;
-
-    setIsLoading(true);
-    try {
-      const [notifs, count] = await Promise.all([
-        NotificationService.getUserNotifications(user.id, 20),
-        NotificationService.getUnreadCount(user.id),
-      ]);
-
-      setNotifications(notifs);
-      setUnreadCount(count);
-    } catch (error) {
-      console.error('Error loading notifications:', error);
-    } finally {
-      setIsLoading(false);
-    }
+  const handleMarkAsRead = (notificationId: string) => {
+    markAsReadMutation.mutate(notificationId);
   };
 
-  const subscribeToNotifications = () => {
-    if (!user) return;
-
-    NotificationService.subscribeToNotifications(user.id, (notification) => {
-      // Add new notification to list
-      setNotifications(prev => [notification, ...prev]);
-      setUnreadCount(prev => prev + 1);
-
-      // Show browser notification
-      NotificationService.showBrowserNotification(notification);
-    });
+  const handleMarkAllAsRead = () => {
+    markAllAsReadMutation.mutate();
   };
 
-  const handleNotificationClick = async (notification: Notification) => {
-    // Mark as read
-    if (!notification.read) {
-      await NotificationService.markAsRead(notification.id);
-      setUnreadCount(prev => Math.max(0, prev - 1));
-      setNotifications(prev =>
-        prev.map(n => (n.id === notification.id ? { ...n, read: true } : n))
-      );
-    }
-
-    // Navigate if action URL exists
-    if (notification.action_url) {
-      navigate(notification.action_url);
-      setIsOpen(false);
-    }
+  const handleDeleteNotification = (notificationId: string) => {
+    deleteNotificationMutation.mutate(notificationId);
   };
 
-  const handleMarkAllAsRead = async () => {
-    if (!user) return;
-
-    const success = await NotificationService.markAllAsRead(user.id);
-    if (success) {
-      setUnreadCount(0);
-      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    }
-  };
-
-  const handleDeleteNotification = async (notificationId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-
-    const success = await NotificationService.deleteNotification(notificationId);
-    if (success) {
-      setNotifications(prev => prev.filter(n => n.id !== notificationId));
-      const deleted = notifications.find(n => n.id === notificationId);
-      if (deleted && !deleted.read) {
-        setUnreadCount(prev => Math.max(0, prev - 1));
-      }
-    }
-  };
-
-  const getNotificationIcon = (type: Notification['type']) => {
-    switch (type) {
-      case 'order_status':
-        return <FiPackage />;
-      case 'delivery_update':
-        return <FiPackage />;
-      case 'payment':
-        return <FiDollarSign />;
-      case 'promotion':
-        return <FiGift />;
-      default:
-        return <FiBell />;
-    }
-  };
-
-  const getTimeAgo = (timestamp: string): string => {
+  const formatTimeAgo = (dateString: string) => {
     const now = new Date();
-    const then = new Date(timestamp);
-    const seconds = Math.floor((now.getTime() - then.getTime()) / 1000);
+    const date = new Date(dateString);
+    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
 
-    if (seconds < 60) return 'Just now';
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-    if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
-    return then.toLocaleDateString();
+    if (diffInMinutes < 1) return 'Just now';
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
+    return `${Math.floor(diffInMinutes / 1440)}d ago`;
+  };
+
+  const getNotificationIcon = (type: string) => {
+    switch (type) {
+      case 'order': return '🛒';
+      case 'product': return '📦';
+      case 'promotion': return '🎉';
+      case 'system': return '🔔';
+      default: return '🔔';
+    }
   };
 
   if (!user) return null;
 
   return (
-    <BellContainer ref={dropdownRef}>
-      <BellButton onClick={() => setIsOpen(!isOpen)}>
+    <NotificationContainer>
+      <NotificationButton
+        onClick={() => setIsOpen(!isOpen)}
+        $hasUnread={unreadCount > 0}
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+      >
         <FiBell />
-        {unreadCount > 0 && <Badge>{unreadCount > 99 ? '99+' : unreadCount}</Badge>}
-      </BellButton>
+        {unreadCount > 0 && <NotificationBadge>{unreadCount}</NotificationBadge>}
+      </NotificationButton>
 
+      <AnimatePresence>
       {isOpen && (
-        <NotificationDropdown>
-          <DropdownHeader>
-            <h3>Notifications</h3>
+          <NotificationDropdown
+            initial={{ opacity: 0, y: -10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+          >
+            <NotificationHeader>
+              <NotificationTitle>Notifications</NotificationTitle>
             {unreadCount > 0 && (
-              <MarkAllButton onClick={handleMarkAllAsRead}>
-                <FiCheck /> Mark all read
-              </MarkAllButton>
-            )}
-          </DropdownHeader>
+                <MarkAllReadButton
+                  onClick={handleMarkAllAsRead}
+                  disabled={markAllAsReadMutation.isPending}
+                >
+                  Mark all read
+                </MarkAllReadButton>
+              )}
+            </NotificationHeader>
 
           <NotificationList>
-            {isLoading ? (
-              <LoadingMessage>Loading notifications...</LoadingMessage>
-            ) : notifications.length === 0 ? (
+              {notifications.length === 0 ? (
               <EmptyState>
-                <FiBell />
-                <p>No notifications yet</p>
+                  <FiBell size={32} />
+                  <EmptyText>No notifications yet</EmptyText>
               </EmptyState>
             ) : (
               notifications.map((notification) => (
                 <NotificationItem
                   key={notification.id}
-                  $read={notification.read}
-                  onClick={() => handleNotificationClick(notification)}
+                    $unread={!notification.read}
+                    whileHover={{ backgroundColor: '#f8f9fa' }}
                 >
-                  <NotificationIcon $type={notification.type}>
+                    <NotificationIcon>
                     {getNotificationIcon(notification.type)}
                   </NotificationIcon>
+                    
                   <NotificationContent>
+                      <NotificationMessage>
                     <NotificationTitle>{notification.title}</NotificationTitle>
-                    <NotificationMessage>{notification.message}</NotificationMessage>
-                    <NotificationTime>{getTimeAgo(notification.created_at)}</NotificationTime>
+                        <NotificationText>{notification.message}</NotificationText>
+                        <NotificationTime>
+                          {formatTimeAgo(notification.created_at)}
+                        </NotificationTime>
+                      </NotificationMessage>
+                      
+                      <NotificationActions>
+                        {!notification.read && (
+                          <ActionButton
+                            onClick={() => handleMarkAsRead(notification.id)}
+                            title="Mark as read"
+                          >
+                            <FiCheck />
+                          </ActionButton>
+                        )}
+                        <ActionButton
+                          onClick={() => handleDeleteNotification(notification.id)}
+                          title="Delete"
+                          $danger
+                        >
+                          <FiTrash2 />
+                        </ActionButton>
+                      </NotificationActions>
                   </NotificationContent>
-                  {!notification.read && <UnreadDot />}
-                  <DeleteButton onClick={(e) => handleDeleteNotification(notification.id, e)}>
-                    <FiX />
-                  </DeleteButton>
                 </NotificationItem>
               ))
             )}
           </NotificationList>
 
           {notifications.length > 0 && (
-            <DropdownFooter>
-              <ViewAllButton onClick={() => { navigate('/dashboard'); setIsOpen(false); }}>
-                View All Notifications
-              </ViewAllButton>
-            </DropdownFooter>
+              <NotificationFooter>
+              <ViewAllLink href="/notifications">View all notifications</ViewAllLink>
+              </NotificationFooter>
           )}
         </NotificationDropdown>
       )}
-    </BellContainer>
+      </AnimatePresence>
+    </NotificationContainer>
   );
 };
 
 export default NotificationBell;
 
+// Animations
+const pulse = keyframes`
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+`;
+
 // Styled Components
-const BellContainer = styled.div`
+const NotificationContainer = styled.div`
   position: relative;
 `;
 
-const BellButton = styled.button`
+const NotificationButton = styled(motion.button)<{ $hasUnread: boolean }>`
   position: relative;
-  background: none;
-  border: none;
-  color: #2D3436;
-  font-size: 1.5rem;
-  cursor: pointer;
-  padding: 0.5rem;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
+  background: white;
+  border: 1px solid #E1E8ED;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
   transition: all 0.3s ease;
+  
+  svg {
+    width: 20px;
+    height: 20px;
+    color: #636E72;
+  }
 
   &:hover {
-    background: #F8F9FA;
+    background: #6C9A7F;
+    border-color: #6C9A7F;
+    
+    svg {
+      color: white;
+    }
   }
+  
+  ${({ $hasUnread }) => $hasUnread && css`
+    animation: ${pulse} 2s infinite;
+  `}
 `;
 
-const Badge = styled.span`
+const NotificationBadge = styled.div`
   position: absolute;
-  top: 0;
-  right: 0;
+  top: -5px;
+  right: -5px;
   background: #E74C3C;
   color: white;
-  font-size: 0.7rem;
-  font-weight: 700;
-  padding: 0.15rem 0.4rem;
-  border-radius: 10px;
-  min-width: 18px;
-  text-align: center;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 2px solid white;
 `;
 
-const NotificationDropdown = styled.div`
+const NotificationDropdown = styled(motion.div)`
   position: absolute;
-  top: calc(100% + 0.5rem);
+  top: calc(100% + 10px);
   right: 0;
-  width: 380px;
-  max-width: 90vw;
+  width: 350px;
   background: white;
   border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-  z-index: 1000;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  border: 1px solid #E1E8ED;
   overflow: hidden;
-
-  @media (max-width: 480px) {
-    width: 100vw;
-    right: -50vw;
-    left: 50%;
-    transform: translateX(-50%);
+  z-index: 1000;
+  
+  @media (max-width: 768px) {
+    width: 300px;
+    right: -50px;
   }
 `;
 
-const DropdownHeader = styled.div`
+const NotificationHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 1.25rem;
-  border-bottom: 1px solid #F8F9FA;
-
-  h3 {
-    margin: 0;
-    font-size: 1.125rem;
-    color: #2D3436;
-  }
+  padding: 1rem;
+  border-bottom: 1px solid #E1E8ED;
+  background: #F8F9FA;
 `;
 
-const MarkAllButton = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+const NotificationTitle = styled.h3`
+  font-size: 1rem;
+  font-weight: 600;
+  color: #2D3436;
+    margin: 0;
+`;
+
+const MarkAllReadButton = styled.button`
   background: none;
   border: none;
   color: #6C9A7F;
@@ -292,167 +311,146 @@ const MarkAllButton = styled.button`
   transition: all 0.3s ease;
 
   &:hover {
-    background: #F0F7F5;
+    background: #6C9A7F15;
+  }
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 `;
 
 const NotificationList = styled.div`
   max-height: 400px;
   overflow-y: auto;
-`;
-
-const LoadingMessage = styled.div`
-  padding: 2rem;
-  text-align: center;
-  color: #636E72;
-`;
-
-const EmptyState = styled.div`
-  padding: 3rem 2rem;
-  text-align: center;
-  color: #636E72;
-
-  svg {
-    font-size: 3rem;
-    margin-bottom: 1rem;
-    opacity: 0.3;
+  
+  &::-webkit-scrollbar {
+    width: 6px;
   }
-
-  p {
-    margin: 0;
+  
+  &::-webkit-scrollbar-thumb {
+    background: #DFE6E9;
+    border-radius: 3px;
   }
 `;
 
-const NotificationItem = styled.div<{ $read: boolean }>`
-  position: relative;
+const NotificationItem = styled(motion.div)<{ $unread: boolean }>`
   display: flex;
   align-items: flex-start;
-  gap: 1rem;
-  padding: 1rem 1.25rem;
-  cursor: pointer;
-  background: ${({ $read }) => ($read ? 'white' : '#F0F7F5')};
-  border-bottom: 1px solid #F8F9FA;
-  transition: all 0.2s ease;
-
-  &:hover {
-    background: #F8F9FA;
-  }
+  gap: 0.75rem;
+  padding: 1rem;
+  border-bottom: 1px solid #F0F0F0;
+  transition: all 0.3s ease;
 
   &:last-child {
     border-bottom: none;
   }
+  
+  ${({ $unread }) => $unread && `
+    background: #E8F5EC;
+    border-left: 3px solid #6C9A7F;
+  `}
 `;
 
-const NotificationIcon = styled.div<{ $type: string }>`
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+const NotificationIcon = styled.div`
   font-size: 1.25rem;
-  flex-shrink: 0;
-  
-  background: ${({ $type }) => {
-    switch ($type) {
-      case 'order_status':
-        return '#E3F2FD';
-      case 'delivery_update':
-        return '#E8F5E9';
-      case 'payment':
-        return '#FFF3E0';
-      case 'promotion':
-        return '#F3E5F5';
-      default:
-        return '#F5F5F5';
-    }
-  }};
-
-  color: ${({ $type }) => {
-    switch ($type) {
-      case 'order_status':
-        return '#1976D2';
-      case 'delivery_update':
-        return '#388E3C';
-      case 'payment':
-        return '#F57C00';
-      case 'promotion':
-        return '#7B1FA2';
-      default:
-        return '#757575';
-    }
-  }};
+  margin-top: 0.125rem;
 `;
 
 const NotificationContent = styled.div`
   flex: 1;
-  min-width: 0;
-`;
-
-const NotificationTitle = styled.div`
-  font-weight: 600;
-  color: #2D3436;
-  margin-bottom: 0.25rem;
-  font-size: 0.9375rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
 `;
 
 const NotificationMessage = styled.div`
+  flex: 1;
+`;
+
+const NotificationText = styled.div`
   font-size: 0.875rem;
   color: #636E72;
-  line-height: 1.4;
   margin-bottom: 0.25rem;
+  line-height: 1.4;
 `;
 
 const NotificationTime = styled.div`
   font-size: 0.75rem;
-  color: #B2BEC3;
+  color: #999;
 `;
 
-const UnreadDot = styled.div`
-  width: 8px;
-  height: 8px;
-  background: #6C9A7F;
-  border-radius: 50%;
-  flex-shrink: 0;
-  margin-top: 0.25rem;
-`;
-
-const DeleteButton = styled.button`
-  background: none;
-  border: none;
-  color: #636E72;
-  cursor: pointer;
-  padding: 0.25rem;
+const NotificationActions = styled.div`
+  display: flex;
+  gap: 0.25rem;
   opacity: 0;
-  transition: all 0.2s ease;
+  transition: opacity 0.3s ease;
 
   ${NotificationItem}:hover & {
     opacity: 1;
   }
+`;
+
+const ActionButton = styled.button<{ $danger?: boolean }>`
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  background: ${({ $danger }) => $danger ? '#E74C3C15' : '#6C9A7F15'};
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  
+  svg {
+    width: 14px;
+    height: 14px;
+    color: ${({ $danger }) => $danger ? '#E74C3C' : '#6C9A7F'};
+  }
 
   &:hover {
-    color: #E74C3C;
+    background: ${({ $danger }) => $danger ? '#E74C3C' : '#6C9A7F'};
+    
+    svg {
+      color: white;
+    }
   }
 `;
 
-const DropdownFooter = styled.div`
-  padding: 0.75rem 1.25rem;
-  border-top: 1px solid #F8F9FA;
+const EmptyState = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  color: #999;
+  
+  svg {
+    margin-bottom: 0.5rem;
+    opacity: 0.5;
+  }
 `;
 
-const ViewAllButton = styled.button`
-  width: 100%;
-  padding: 0.75rem;
+const EmptyText = styled.div`
+  font-size: 0.875rem;
+`;
+
+const NotificationFooter = styled.div`
+  padding: 1rem;
+  border-top: 1px solid #E1E8ED;
   background: #F8F9FA;
-  border: none;
-  border-radius: 8px;
+  text-align: center;
+`;
+
+const ViewAllLink = styled.a`
   color: #6C9A7F;
+  text-decoration: none;
+  font-size: 0.875rem;
   font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
 
   &:hover {
-    background: #6C9A7F;
-    color: white;
+    text-decoration: underline;
   }
 `;

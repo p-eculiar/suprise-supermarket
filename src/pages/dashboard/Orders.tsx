@@ -3,8 +3,11 @@ import styled from 'styled-components';
 import { useAuth } from '../../contexts/AuthContext';
 import { userService } from '../../services/userService';
 import { OrderItemThumbnail } from '../../components/common/StyledImage';
-import { FiPackage, FiClock, FiMapPin, FiDollarSign, FiEye, FiRefreshCw } from 'react-icons/fi';
+import { FiPackage, FiClock, FiMapPin, FiDollarSign, FiEye, FiRefreshCw, FiTruck } from 'react-icons/fi';
 import toast from '../../components/common/Toast';
+import { useNavigate } from 'react-router-dom';
+import { useRealtime } from '../../hooks/useRealtime';
+import { supabase } from '../../lib/supabase';
 
 interface Order {
   id: string;
@@ -18,6 +21,7 @@ interface Order {
 
 const Orders: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -28,6 +32,18 @@ const Orders: React.FC = () => {
       loadOrders();
     }
   }, [user]);
+
+  // Realtime: refresh orders when this user's orders change
+  useRealtime<any>({
+    table: 'orders',
+    events: ['INSERT', 'UPDATE', 'DELETE'],
+    onEvent: async () => {
+      if (!user) return;
+      await loadOrders();
+    },
+    channelName: 'user-orders-realtime',
+    filter: user ? { column: 'user_id', value: user.id } : undefined,
+  });
 
   const loadOrders = async () => {
     if (!user) return;
@@ -196,6 +212,13 @@ const Orders: React.FC = () => {
                 <ViewButton onClick={() => setSelectedOrder(order)}>
                   <FiEye /> View Details
                 </ViewButton>
+                {(order.status.toLowerCase() === 'processing' || 
+                  order.status.toLowerCase() === 'shipped' || 
+                  order.status.toLowerCase() === 'out_for_delivery') && (
+                  <TrackButton onClick={() => navigate(`/dashboard/tracking/${order.id}`)}>
+                    <FiTruck /> Track Delivery
+                  </TrackButton>
+                )}
                 {order.status.toLowerCase() === 'delivered' && (
                   <ReorderButton>
                     <FiRefreshCw /> Reorder
@@ -432,6 +455,24 @@ const ViewButton = styled.button`
 
   &:hover {
     background: #5A8470;
+  }
+`;
+
+const TrackButton = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: #3498DB;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+
+  &:hover {
+    background: #2980B9;
   }
 `;
 

@@ -1,7 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
+import { useRealtime } from '../../hooks/useRealtime';
+import { SocialLeadsApi } from '../../services/socialLeadsApi';
+import toast from '../../components/common/Toast';
 import {
   FiTwitter,
   FiFacebook,
@@ -34,9 +37,11 @@ const SocialLeads: React.FC = () => {
   const [isScanning, setIsScanning] = useState(false);
 
   // Fetch social leads
-  const { data: leads, isLoading } = useQuery({
+  const { data: leads, isLoading, error } = useQuery({
     queryKey: ['social-leads', selectedPlatform, selectedStatus],
     queryFn: async () => {
+      console.log('Fetching social leads with filters:', { selectedPlatform, selectedStatus });
+      
       let query = supabase.from('social_leads').select('*');
 
       if (selectedPlatform !== 'all') {
@@ -48,9 +53,30 @@ const SocialLeads: React.FC = () => {
       }
 
       const { data, error } = await query.order('created_at', { ascending: false }).limit(100);
-      if (error) throw error;
+      
+      if (error) {
+        console.error('Error fetching social leads:', error);
+        throw error;
+      }
+      
+      console.log('Successfully fetched social leads:', data?.length || 0);
       return data as SocialLead[];
     },
+  });
+
+  // Log any query errors
+  useEffect(() => {
+    if (error) {
+      console.error('Social leads query error:', error);
+    }
+  }, [error]);
+
+  // Realtime: refresh leads list on changes
+  useRealtime<any>({
+    table: 'social_leads',
+    events: ['INSERT','UPDATE','DELETE'],
+    onEvent: () => queryClient.invalidateQueries({ queryKey: ['social-leads'] }),
+    channelName: 'admin-social-leads',
   });
 
   // Statistics
@@ -66,12 +92,16 @@ const SocialLeads: React.FC = () => {
     mutationFn: async ({ leadId, status }: { leadId: string; status: string }) => {
       const { error } = await supabase
         .from('social_leads')
-        .update({ status })
+        .update({ status, updated_at: new Date().toISOString() })
         .eq('id', leadId);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['social-leads'] });
+      toast.success('Lead status updated successfully');
+    },
+    onError: (error) => {
+      toast.error('Failed to update lead status: ' + (error as Error).message);
     },
   });
 
@@ -80,19 +110,26 @@ const SocialLeads: React.FC = () => {
     setIsScanning(true);
     
     try {
-      // This would typically call a backend API that scrapes social media
-      // For now, we'll simulate it
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      toast.info('Scanning social media for new leads...');
       
-      // In production, you would call:
-      // const response = await fetch('/api/scan-social-leads', { method: 'POST' });
-      // const newLeads = await response.json();
+      // Call the real API endpoint to scan social media
+      const response = await SocialLeadsApi.scanSocialLeads();
       
-      queryClient.invalidateQueries({ queryKey: ['social-leads'] });
-      alert('Scan completed! Check for new leads.');
+      if (response.success) {
+        queryClient.invalidateQueries({ queryKey: ['social-leads'] });
+        
+        // Show success toast
+        if (response.data && response.data.total > 0) {
+          toast.success(`Found ${response.data.total} new leads!`);
+        } else {
+          toast.info('No new leads found. Try again later.');
+        }
+      } else {
+        throw new Error(response.message);
+      }
     } catch (error) {
       console.error('Error scanning leads:', error);
-      alert('Failed to scan for leads');
+      toast.error('Failed to scan for leads: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setIsScanning(false);
     }
@@ -228,6 +265,17 @@ const SocialLeads: React.FC = () => {
       <LeadsContainer>
         {isLoading ? (
           <LoadingText>Loading leads...</LoadingText>
+        ) : error ? (
+          <EmptyState>
+            <EmptyIcon>
+              <FiMessageCircle />
+            </EmptyIcon>
+            <EmptyText>Error Loading Leads</EmptyText>
+            <EmptySubtext>{error.message || 'Failed to load social leads. Please try again.'}</EmptySubtext>
+            <RefreshButton onClick={() => queryClient.invalidateQueries({ queryKey: ['social-leads'] })}>
+              <FiRefreshCw /> Retry
+            </RefreshButton>
+          </EmptyState>
         ) : leads && leads.length > 0 ? (
           leads.map((lead) => (
             <LeadCard key={lead.id}>
@@ -285,13 +333,15 @@ const SocialLeads: React.FC = () => {
                   <option value="ignored">Ignored</option>
                 </StatusSelect>
 
-                <ContactButton
-                  href={`https://wa.me/${lead.contact_info?.replace(/\D/g, '')}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <FiMessageCircle /> Contact
-                </ContactButton>
+                {lead.contact_info && lead.contact_info.trim() !== '' && (
+                  <ContactButton
+                    href={`https://wa.me/${lead.contact_info?.replace(/\D/g, '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <FiMessageCircle /> Contact on WhatsApp
+                  </ContactButton>
+                )}
               </LeadActions>
             </LeadCard>
           ))
@@ -301,7 +351,14 @@ const SocialLeads: React.FC = () => {
               <FiMessageCircle />
             </EmptyIcon>
             <EmptyText>No leads found</EmptyText>
-            <EmptySubtext>Click "Scan for New Leads" to find potential customers</EmptySubtext>
+            <EmptySubtext>
+              {selectedPlatform !== 'all' || selectedStatus !== 'all' 
+                ? 'No leads match your filters. Try adjusting the filters above.'
+                : 'Click "Scan for New Leads" to find potential customers from Twitter.'}
+            </EmptySubtext>
+            <RefreshButton onClick={() => queryClient.invalidateQueries({ queryKey: ['social-leads'] })} style={{ marginTop: '1rem' }}>
+              <FiRefreshCw /> Refresh
+            </RefreshButton>
           </EmptyState>
         )}
       </LeadsContainer>
@@ -318,6 +375,11 @@ const SocialLeads: React.FC = () => {
             <li>"office pantry"</li>
             <li>"send groceries to Nigeria"</li>
           </ul>
+          We currently scan:
+          <ul>
+            <li>Twitter - Real-time posts</li>
+            <li>Facebook - Community posts and discussions</li>
+          </ul>
           Click "Scan for New Leads" to search for potential customers in real-time.
         </InfoText>
       </InfoBox>
@@ -330,6 +392,16 @@ export default SocialLeads;
 // Styled Components
 const Container = styled.div`
   padding: 2rem;
+  background: #F8F9FA;
+  min-height: 100vh;
+  
+  @media (max-width: 768px) {
+    padding: 1rem;
+  }
+  
+  @media (max-width: 480px) {
+    padding: 0.5rem;
+  }
 `;
 
 const Header = styled.div`
@@ -342,6 +414,10 @@ const Header = styled.div`
     flex-direction: column;
     gap: 1rem;
   }
+  
+  @media (max-width: 480px) {
+    margin-bottom: 1rem;
+  }
 `;
 
 const HeaderContent = styled.div``;
@@ -349,11 +425,23 @@ const HeaderContent = styled.div``;
 const Title = styled.h1`
   font-size: 2rem;
   margin-bottom: 0.5rem;
+  
+  @media (max-width: 768px) {
+    font-size: 1.5rem;
+  }
+  
+  @media (max-width: 480px) {
+    font-size: 1.25rem;
+  }
 `;
 
 const Subtitle = styled.p`
   color: #666;
   font-size: 0.95rem;
+  
+  @media (max-width: 480px) {
+    font-size: 0.9rem;
+  }
 `;
 
 const ScanButton = styled.button`
@@ -361,16 +449,17 @@ const ScanButton = styled.button`
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem 1.5rem;
-  background: ${({ theme }) => theme.colors.primary.main};
+  background: #6C9A7F; /* Changed to the correct green color */
   color: white;
   border: none;
   border-radius: 8px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
+  white-space: nowrap;
   
   &:hover:not(:disabled) {
-    opacity: 0.9;
+    background: #5A8569; /* Darker green on hover */
     transform: translateY(-2px);
   }
   
@@ -387,6 +476,11 @@ const ScanButton = styled.button`
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
   }
+  
+  @media (max-width: 480px) {
+    padding: 0.6rem 1rem;
+    font-size: 0.9rem;
+  }
 `;
 
 const StatsGrid = styled.div`
@@ -394,6 +488,15 @@ const StatsGrid = styled.div`
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 1.5rem;
   margin-bottom: 2rem;
+  
+  @media (max-width: 768px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  @media (max-width: 480px) {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
 `;
 
 const StatCard = styled.div`
@@ -404,6 +507,10 @@ const StatCard = styled.div`
   display: flex;
   align-items: center;
   gap: 1rem;
+  
+  @media (max-width: 480px) {
+    padding: 1rem;
+  }
 `;
 
 const StatIcon = styled.div<{ $color: string }>`
@@ -416,6 +523,12 @@ const StatIcon = styled.div<{ $color: string }>`
   align-items: center;
   justify-content: center;
   font-size: 1.5rem;
+  
+  @media (max-width: 480px) {
+    width: 40px;
+    height: 40px;
+    font-size: 1.25rem;
+  }
 `;
 
 const StatInfo = styled.div`
@@ -426,12 +539,20 @@ const StatLabel = styled.div`
   font-size: 0.875rem;
   color: #666;
   margin-bottom: 0.25rem;
+  
+  @media (max-width: 480px) {
+    font-size: 0.8rem;
+  }
 `;
 
 const StatValue = styled.div`
   font-size: 1.5rem;
   font-weight: 700;
   color: #333;
+  
+  @media (max-width: 480px) {
+    font-size: 1.25rem;
+  }
 `;
 
 const FilterBar = styled.div`
@@ -443,6 +564,10 @@ const FilterBar = styled.div`
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  
+  @media (max-width: 480px) {
+    padding: 1rem;
+  }
 `;
 
 const FilterSection = styled.div`
@@ -450,11 +575,20 @@ const FilterSection = styled.div`
   align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
+  
+  @media (max-width: 480px) {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 `;
 
 const FilterLabel = styled.div`
   font-weight: 600;
   min-width: 80px;
+  
+  @media (max-width: 480px) {
+    font-size: 0.9rem;
+  }
 `;
 
 const FilterButtons = styled.div`
@@ -465,7 +599,7 @@ const FilterButtons = styled.div`
 
 const FilterButton = styled.button<{ $active: boolean }>`
   padding: 0.5rem 1rem;
-  background: ${({ $active, theme }) => ($active ? theme.colors.primary.main : '#f5f5f5')};
+  background: ${({ $active }) => ($active ? '#6C9A7F' : '#f5f5f5')}; /* Changed to correct green */
   color: ${({ $active }) => ($active ? 'white' : '#666')};
   border: none;
   border-radius: 6px;
@@ -474,7 +608,12 @@ const FilterButton = styled.button<{ $active: boolean }>`
   transition: all 0.3s ease;
   
   &:hover {
-    opacity: 0.9;
+    background: ${({ $active }) => ($active ? '#5A8569' : '#e0e0e0')}; /* Darker green on hover */
+  }
+  
+  @media (max-width: 480px) {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
   }
 `;
 
@@ -489,6 +628,11 @@ const LoadingText = styled.div`
   text-align: center;
   padding: 3rem;
   color: #666;
+  
+  @media (max-width: 480px) {
+    padding: 2rem 1rem;
+    font-size: 0.9rem;
+  }
 `;
 
 const LeadCard = styled.div`
@@ -496,6 +640,10 @@ const LeadCard = styled.div`
   padding: 1.5rem;
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  
+  @media (max-width: 480px) {
+    padding: 1rem;
+  }
 `;
 
 const LeadHeader = styled.div`
@@ -503,6 +651,12 @@ const LeadHeader = styled.div`
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1rem;
+  
+  @media (max-width: 480px) {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
 `;
 
 const PlatformBadge = styled.span<{ $color: string }>`
@@ -516,11 +670,19 @@ const PlatformBadge = styled.span<{ $color: string }>`
   background: ${({ $color }) => `${$color}20`};
   color: ${({ $color }) => $color};
   text-transform: capitalize;
+  
+  @media (max-width: 480px) {
+    font-size: 0.8rem;
+  }
 `;
 
 const LeadDate = styled.span`
   font-size: 0.875rem;
   color: #666;
+  
+  @media (max-width: 480px) {
+    font-size: 0.8rem;
+  }
 `;
 
 const AuthorInfo = styled.div`
@@ -530,11 +692,19 @@ const AuthorInfo = styled.div`
 const AuthorName = styled.div`
   font-weight: 600;
   font-size: 1.1rem;
+  
+  @media (max-width: 480px) {
+    font-size: 1rem;
+  }
 `;
 
 const AuthorHandle = styled.div`
   font-size: 0.9rem;
   color: #666;
+  
+  @media (max-width: 480px) {
+    font-size: 0.85rem;
+  }
 `;
 
 const PostContent = styled.p`
@@ -544,7 +714,12 @@ const PostContent = styled.p`
   padding: 1rem;
   background: #f9f9f9;
   border-radius: 8px;
-  border-left: 3px solid ${({ theme }) => theme.colors.primary.main};
+  border-left: 3px solid #6C9A7F; /* Changed to correct green */
+  
+  @media (max-width: 480px) {
+    padding: 0.75rem;
+    font-size: 0.9rem;
+  }
 `;
 
 const Keywords = styled.div`
@@ -559,6 +734,10 @@ const KeywordLabel = styled.span`
   font-size: 0.875rem;
   color: #666;
   font-weight: 600;
+  
+  @media (max-width: 480px) {
+    font-size: 0.8rem;
+  }
 `;
 
 const Keyword = styled.span`
@@ -568,6 +747,10 @@ const Keyword = styled.span`
   border-radius: 4px;
   font-size: 0.75rem;
   font-weight: 600;
+  
+  @media (max-width: 480px) {
+    font-size: 0.7rem;
+  }
 `;
 
 const ContactInfo = styled.div`
@@ -580,12 +763,21 @@ const ContactInfo = styled.div`
   margin-bottom: 1rem;
   font-weight: 600;
   color: #856404;
+  
+  @media (max-width: 480px) {
+    padding: 0.5rem;
+    font-size: 0.9rem;
+  }
 `;
 
 const LeadActions = styled.div`
   display: flex;
   gap: 0.75rem;
   flex-wrap: wrap;
+  
+  @media (max-width: 480px) {
+    flex-direction: column;
+  }
 `;
 
 const ActionButton = styled.a`
@@ -604,6 +796,12 @@ const ActionButton = styled.a`
   &:hover {
     background: #e0e0e0;
   }
+  
+  @media (max-width: 480px) {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+    justify-content: center;
+  }
 `;
 
 const StatusSelect = styled.select`
@@ -615,7 +813,12 @@ const StatusSelect = styled.select`
   
   &:focus {
     outline: none;
-    border-color: ${({ theme }) => theme.colors.primary.main};
+    border-color: #6C9A7F; /* Changed to correct green */
+  }
+  
+  @media (max-width: 480px) {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
   }
 `;
 
@@ -624,7 +827,7 @@ const ContactButton = styled.a`
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 1rem;
-  background: #25d366;
+  background: #6C9A7F; /* Changed to correct green */
   color: white;
   text-decoration: none;
   border-radius: 6px;
@@ -633,29 +836,85 @@ const ContactButton = styled.a`
   transition: all 0.3s ease;
   
   &:hover {
-    opacity: 0.9;
+    background: #5A8569; /* Darker green on hover */
+  }
+  
+  @media (max-width: 480px) {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+    justify-content: center;
   }
 `;
 
 const EmptyState = styled.div`
   text-align: center;
   padding: 4rem 2rem;
+  
+  @media (max-width: 480px) {
+    padding: 2rem 1rem;
+  }
 `;
 
 const EmptyIcon = styled.div`
   font-size: 4rem;
   color: #ccc;
   margin-bottom: 1rem;
+  
+  @media (max-width: 480px) {
+    font-size: 3rem;
+  }
 `;
 
 const EmptyText = styled.h3`
   font-size: 1.25rem;
   color: #666;
   margin-bottom: 0.5rem;
+  
+  @media (max-width: 480px) {
+    font-size: 1.1rem;
+  }
 `;
 
 const EmptySubtext = styled.p`
   color: #999;
+  
+  @media (max-width: 480px) {
+    font-size: 0.9rem;
+  }
+`;
+
+const RefreshButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: #6C9A7F; /* Changed to correct green */
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  
+  &:hover:not(:disabled) {
+    background: #5A8569; /* Darker green on hover */
+    transform: translateY(-2px);
+  }
+  
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  
+  svg {
+    width: 18px;
+    height: 18px;
+  }
+  
+  @media (max-width: 480px) {
+    padding: 0.6rem 1rem;
+    font-size: 0.9rem;
+  }
 `;
 
 const InfoBox = styled.div`
@@ -663,11 +922,19 @@ const InfoBox = styled.div`
   border: 2px solid #1565c0;
   border-radius: 12px;
   padding: 1.5rem;
+  
+  @media (max-width: 480px) {
+    padding: 1rem;
+  }
 `;
 
 const InfoTitle = styled.h3`
   color: #1565c0;
   margin-bottom: 1rem;
+  
+  @media (max-width: 480px) {
+    font-size: 1.1rem;
+  }
 `;
 
 const InfoText = styled.div`
@@ -681,5 +948,9 @@ const InfoText = styled.div`
   
   li {
     margin: 0.25rem 0;
+  }
+  
+  @media (max-width: 480px) {
+    font-size: 0.9rem;
   }
 `;

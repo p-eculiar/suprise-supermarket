@@ -1,5 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import toast from '../components/common/Toast';
+import { useAuth } from './AuthContext';
+import { useSettings } from './SettingsContext';
 
 interface CartItem {
   id: string;
@@ -29,12 +32,34 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const saved = localStorage.getItem('cart');
     return saved ? JSON.parse(saved) : [];
   });
+  const { isAuthenticated } = useAuth();
+  const { settings } = useSettings();
+  const navigate = useNavigate();
 
   useEffect(() => {
     localStorage.setItem('cart', JSON.stringify(cartItems));
   }, [cartItems]);
 
   const addToCart = (item: Omit<CartItem, 'quantity'>, quantity: number = 1) => {
+    // Check if user is authenticated
+    if (!isAuthenticated) {
+      // Show toast notification
+      toast.info('Please login or signup to add items to cart');
+      
+      // Navigate to login page after a short delay
+      setTimeout(() => {
+        navigate('/login', { 
+          state: { 
+            message: 'Please login to add items to cart',
+            redirectToCart: true,
+            product: item
+          } 
+        });
+      }, 1500);
+      
+      return;
+    }
+    
     setCartItems((prev) => {
       const existingItem = prev.find((i) => i.id === item.id);
       if (existingItem) {
@@ -45,7 +70,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
             : i
         );
       }
-      toast.addedToCart(item.name);
+      // Pass currency symbol based on settings
+      const currencySymbol = settings.currency === 'NGN' ? '₦' : '$';
+      toast.addedToCart(item.name, item.price * quantity, quantity, currencySymbol);
       return [...prev, { ...item, quantity }];
     });
   };

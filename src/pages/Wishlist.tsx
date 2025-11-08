@@ -3,12 +3,14 @@ import styled from 'styled-components';
 import { motion } from 'framer-motion';
 import { useWishlist } from '../contexts/WishlistContext';
 import { useCart } from '../contexts/CartContext';
+import { useSettings } from '../contexts/SettingsContext';
 import { FiX, FiShoppingCart } from 'react-icons/fi';
 import { Link } from 'react-router-dom';
 
 const Wishlist: React.FC = () => {
   const { wishlistItems, removeFromWishlist, clearWishlist } = useWishlist();
   const { addToCart } = useCart();
+  const { formatCurrency } = useSettings();
 
   const handleAddToCart = (item: any) => {
     addToCart({
@@ -97,7 +99,7 @@ const Wishlist: React.FC = () => {
                     </ProductCell>
 
                     <PriceCell>
-                      <Price>${item.price.toFixed(2)}</Price>
+                      <Price>{formatCurrency(item.price)}</Price>
                     </PriceCell>
 
                     <DateCell>

@@ -32,17 +32,20 @@ CREATE INDEX IF NOT EXISTS idx_wishlist_product_id ON wishlist(product_id);
 ALTER TABLE wishlist ENABLE ROW LEVEL SECURITY;
 
 -- 5. CREATE RLS POLICIES FOR WISHLIST
+-- Drop existing policies first to avoid conflicts
 DROP POLICY IF EXISTS "Users can view their own wishlist" ON wishlist;
+DROP POLICY IF EXISTS "Users can add to their wishlist" ON wishlist;
+DROP POLICY IF EXISTS "Users can remove from their wishlist" ON wishlist;
+
+-- Create new policies
 CREATE POLICY "Users can view their own wishlist"
   ON wishlist FOR SELECT
   USING (auth.uid() = user_id);
 
-DROP POLICY IF EXISTS "Users can add to their wishlist" ON wishlist;
 CREATE POLICY "Users can add to their wishlist"
   ON wishlist FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
-DROP POLICY IF EXISTS "Users can remove from their wishlist" ON wishlist;
 CREATE POLICY "Users can remove from their wishlist"
   ON wishlist FOR DELETE
   USING (auth.uid() = user_id);

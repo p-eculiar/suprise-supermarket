@@ -52,7 +52,23 @@ const ResetPassword: React.FC = () => {
   const newPassword = watch('password');
 
   useEffect(() => {
-    const tokenParam = searchParams.get('token');
+    // Get token from URL - Supabase can send it in different ways
+    const urlParams = new URLSearchParams(window.location.search);
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    
+    // Check multiple possible parameter names for the token
+    const tokenParam = 
+      urlParams.get('token') || 
+      hashParams.get('token') || 
+      urlParams.get('access_token') ||
+      hashParams.get('access_token') ||
+      urlParams.get('reset_token') ||
+      hashParams.get('reset_token');
+    
+    console.log('URL search params:', Object.fromEntries(urlParams.entries()));
+    console.log('URL hash params:', Object.fromEntries(hashParams.entries()));
+    console.log('Token param found:', tokenParam);
+    
     if (!tokenParam) {
       setIsTokenValid(false);
       setError('Invalid or missing reset token');
@@ -180,15 +196,12 @@ const ResetPassword: React.FC = () => {
               <Text mt={2}>Redirecting to login page...</Text>
             </Alert>
           ) : (
-            <Button 
+            <SubmitButton 
               type="submit" 
-              variant="primary" 
-              fullWidth 
-              isLoading={isLoading}
               disabled={isLoading}
             >
-              Reset Password
-            </Button>
+              {isLoading ? 'Resetting Password...' : 'Reset Password'}
+            </SubmitButton>
           )}
 
           <Text mt={3} textAlign="center">
@@ -232,4 +245,28 @@ const Alert = styled.div<{ success?: boolean }>`
   text-align: center;
   border: 1px solid ${({ success }) => 
     success ? 'var(--success)' : 'var(--error)'};
+`;
+
+const SubmitButton = styled.button`
+  width: 100%;
+  padding: 1rem;
+  background: #6C9A7F;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  
+  &:hover:not(:disabled) {
+    background: #5A8569;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(108, 154, 127, 0.3);
+  }
+  
+  &:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
 `;

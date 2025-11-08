@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Nigerian Market APIs</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        .api-test { margin: 20px 0; padding: 15px; border: 1px solid #ddd; }
+        .success { background: #d4edda; }
+        .error { background: #f8d7da; }
+        .loading { background: #fff3cd; }
+        pre { background: #f5f5f5; padding: 10px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🇳🇬 Testing Nigerian Market Data APIs</h1>
+    
+    <div id="worldbank" class="api-test loading">
+        <h3>1. World Bank API - Nigerian GDP</h3>
+        <p>Testing: <code>https://api.worldbank.org/v2/country/NGA/indicator/NY.GDP.MKTP.CD?format=json&date=2022:2023</code></p>
+        <div class="result">Loading...</div>
+    </div>
+
+    <div id="exchange" class="api-test loading">
+        <h3>2. Exchange Rate API - USD to NGN</h3>
+        <p>Testing: <code>https://api.exchangerate-api.com/v4/latest/USD</code></p>
+        <div class="result">Loading...</div>
+    </div>
+
+    <div id="restcountries" class="api-test loading">
+        <h3>3. REST Countries API - Nigeria Info</h3>
+        <p>Testing: <code>https://restcountries.com/v3.1/alpha/NGA</code></p>
+        <div class="result">Loading...</div>
+    </div>
+
+    <div id="alternative" class="api-test loading">
+        <h3>4. Alternative APIs for Nigerian Market Data</h3>
+        <div class="result">
+            <p><strong>Issue:</strong> There are NO free public APIs specifically for:</p>
+            <ul>
+                <li>❌ Nigerian supermarket product prices</li>
+                <li>❌ Real-time commodity prices in Nigerian markets</li>
+                <li>❌ Product performance by Nigerian state</li>
+                <li>❌ Retail sales data across Nigeria</li>
+            </ul>
+            <p><strong>Why?</strong> This type of commercial market data is typically:</p>
+            <ul>
+                <li>Proprietary (owned by market research companies)</li>
+                <li>Paid (requires subscription)</li>
+                <li>Not publicly available</li>
+            </ul>
+            <p><strong>Solutions:</strong></p>
+            <ol>
+                <li><strong>Web Scraping (Free but complex):</strong> Scrape Nigerian e-commerce sites</li>
+                <li><strong>Google Sheets API (Free):</strong> Manually curate data in Google Sheets, read via API</li>
+                <li><strong>Airtable API (Free tier):</strong> Store market data, access via API</li>
+                <li><strong>Your own Supabase tables (Recommended):</strong> Manually input Nigerian market research</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        // Test World Bank API
+        fetch('https://api.worldbank.org/v2/country/NGA/indicator/NY.GDP.MKTP.CD?format=json&date=2022:2023')
+            .then(r => r.json())
+            .then(data => {
+                const div = document.getElementById('worldbank');
+                div.className = 'api-test success';
+                div.querySelector('.result').innerHTML = `
+                    <p>✅ <strong>SUCCESS!</strong> World Bank API is working.</p>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                    <p><strong>Note:</strong> This gives economic indicators (GDP, inflation) but NOT product-level market data.</p>
+                `;
+            })
+            .catch(err => {
+                const div = document.getElementById('worldbank');
+                div.className = 'api-test error';
+                div.querySelector('.result').innerHTML = `❌ Error: ${err.message}`;
+            });
+
+        // Test Exchange Rate API
+        fetch('https://api.exchangerate-api.com/v4/latest/USD')
+            .then(r => r.json())
+            .then(data => {
+                const div = document.getElementById('exchange');
+                div.className = 'api-test success';
+                div.querySelector('.result').innerHTML = `
+                    <p>✅ <strong>SUCCESS!</strong> Exchange Rate API is working.</p>
+                    <p><strong>USD to NGN:</strong> ₦${data.rates.NGN}</p>
+                    <p><strong>Note:</strong> This only gives currency conversion, not market data.</p>
+                `;
+            })
+            .catch(err => {
+                const div = document.getElementById('exchange');
+                div.className = 'api-test error';
+                div.querySelector('.result').innerHTML = `❌ Error: ${err.message}`;
+            });
+
+        // Test REST Countries API
+        fetch('https://restcountries.com/v3.1/alpha/NGA')
+            .then(r => r.json())
+            .then(data => {
+                const div = document.getElementById('restcountries');
+                div.className = 'api-test success';
+                div.querySelector('.result').innerHTML = `
+                    <p>✅ <strong>SUCCESS!</strong> REST Countries API is working.</p>
+                    <p><strong>Population:</strong> ${data[0].population.toLocaleString()}</p>
+                    <p><strong>Note:</strong> This gives country-level data, not product market data.</p>
+                `;
+            })
+            .catch(err => {
+                const div = document.getElementById('restcountries');
+                div.className = 'api-test error';
+                div.querySelector('.result').innerHTML = `❌ Error: ${err.message}`;
+            });
+
+        // Mark alternative section as informational
+        setTimeout(() => {
+            document.getElementById('alternative').className = 'api-test';
+        }, 1000);
+    </script>
+</body>
+</html>

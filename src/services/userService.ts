@@ -11,6 +11,7 @@ export interface UserProfile {
   state?: string;
   postal_code?: string;
   email_notifications?: boolean;
+  role?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -69,6 +70,50 @@ class UserService {
     } catch (error) {
       console.error('Update profile error:', error);
       return false;
+    }
+  }
+
+  /**
+   * Update user role
+   */
+  async updateUserRole(userId: string, role: 'customer' | 'admin' | 'vendor'): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ role })
+        .eq('id', userId);
+
+      if (error) {
+        console.error('Error updating user role:', error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Update user role error:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get all users (admin only)
+   */
+  async getAllUsers(): Promise<UserProfile[]> {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching users:', error);
+        return [];
+      }
+
+      return data as UserProfile[];
+    } catch (error) {
+      console.error('Get all users error:', error);
+      return [];
     }
   }
 

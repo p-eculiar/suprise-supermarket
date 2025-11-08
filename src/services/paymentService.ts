@@ -33,9 +33,7 @@ export interface PaystackConfig {
   amount: number; // in kobo (multiply by 100)
   publicKey: string;
   metadata?: {
-    order_id: string;
-    customer_name: string;
-    custom_fields?: any[];
+    custom_fields: { display_name: string; variable_name: string; value: string }[];
   };
 }
 
@@ -153,8 +151,6 @@ class PaymentService {
       amount: Math.round(amount * 100), // Convert to kobo
       publicKey: this.paystackPublicKey,
       metadata: {
-        order_id: orderId,
-        customer_name: customerName,
         custom_fields: [
           {
             display_name: 'Order ID',
@@ -176,7 +172,7 @@ class PaymentService {
    */
   async updateOrderPaymentStatus(
     orderId: string,
-    status: 'paid' | 'failed',
+    status: 'paid' | 'failed' | 'pending',
     paystackReference?: string
   ): Promise<boolean> {
     try {
@@ -218,7 +214,7 @@ class PaymentService {
     orderId: string,
     reference: string,
     amount: number,
-    status: 'success' | 'failed',
+    status: 'success' | 'failed' | 'pending',
     providerReference?: string,
     providerResponse?: any
   ): Promise<boolean> {

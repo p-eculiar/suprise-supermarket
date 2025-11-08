@@ -1,10 +1,40 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Supabase configuration
-const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
+// Supabase configuration - supports both Vite (VITE_*) and CRA (REACT_APP_*)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const viteEnv = (typeof import.meta !== 'undefined' ? (import.meta as any).env : {}) || {};
+const supabaseUrl = viteEnv.VITE_SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL || '';
+const supabaseAnonKey = viteEnv.VITE_SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY || '';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Supabase env vars missing. Set REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY');
+}
+
+// Create Supabase client with real-time enabled
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  realtime: {
+    params: {
+      eventsPerSecond: 10,
+    },
+  },
+  db: {
+    schema: 'public',
+  },
+});
+
+// Expose for debugging in browser console
+// Usage: window.__SUPABASE__
+// This helps verify the app is pointed at the expected project at runtime
+// (safe: only the anon client already in the bundle)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).__SUPABASE__ = supabase;
+try {
+  const base = (supabase as any)?.storageUrl?.replace('/storage/v1', '') || supabaseUrl;
+  // eslint-disable-next-line no-console
+  console.log('[Supabase] Base URL:', base);
+} catch {
+  // ignore
+}
 
 // Database Types
 export interface Product {

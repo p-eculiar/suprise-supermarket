@@ -1,0 +1,1237 @@
+import React, { useState } from 'react';
+import styled from 'styled-components';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '../../lib/supabase';
+import { useRealtime } from '../../hooks/useRealtime';
+import { FiSearch, FiFilter, FiUserPlus, FiEdit2, FiTrash2, FiMail, FiShoppingBag, FiRefreshCw, FiX } from 'react-icons/fi';
+import { EmailNotificationService } from '../../services/emailService';
+
+interface User {
+  id: string;
+  full_name: string;
+  email: string;
+  role: 'customer' | 'admin' | 'vendor';
+  profile_status: 'active' | 'inactive' | 'banned';
+  totalOrders: number;
+  totalSpent: number;
+  created_at: string;
+  updated_at: string;
+}
+
+const AdminUsers: React.FC = () => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterRole, setFilterRole] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const [emailData, setEmailData] = useState({
+    subject: '',
+    content: '',
+    includeImages: false
+  });
+  const [isSendingEmails, setIsSendingEmails] = useState(false);
+  const [emailProgress, setEmailProgress] = useState({ sent: 0, total: 0 });
+  const [viewingUser, setViewingUser] = useState<User | null>(null);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const queryClient = useQueryClient();
+
+  // Add these functions for user management
+  const handleEditUser = (user: User) => {
+    setEditingUser(user);
+    setIsModalOpen(true);
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    if (window.confirm('Are you sure you want to delete this user?')) {
+      try {
+        const { error } = await supabase
+          .from('profiles')
+          .delete()
+          .eq('id', userId);
+
+        if (error) throw error;
+        
+        // Refresh the data
+        queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      } catch (error) {
+        console.error('Error deleting user:', error);
+        alert('Error deleting user');
+      }
+    }
+  };
+
+  const handleSendEmail = (user: User) => {
+    // Select only this user for email
+    setSelectedUsers([user.id]);
+    setIsEmailModalOpen(true);
+  };
+
+  const handleBulkEmail = () => {
+    // If no users are selected, use all users
+    if (selectedUsers.length === 0 && usersData) {
+      setSelectedUsers(usersData.map((user: User) => user.id));
+    }
+    setIsEmailModalOpen(true);
+  };
+
+  const handleSaveUser = async (updatedUser: User) => {
+    try {
+      // Update user profile with more fields
+      const updateData: any = {
+        full_name: updatedUser.full_name,
+        role: updatedUser.role,
+        updated_at: new Date().toISOString()
+      };
+      
+      // Only include fields that have changed
+      if (editingUser) {
+        if (updatedUser.full_name !== editingUser.full_name) {
+          updateData.full_name = updatedUser.full_name;
+        }
+        if (updatedUser.role !== editingUser.role) {
+          updateData.role = updatedUser.role;
+        }
+      }
+
+      const { error } = await supabase
+        .from('profiles')
+        .update(updateData)
+        .eq('id', updatedUser.id);
+
+      if (error) throw error;
+      
+      // Close modal and refresh data
+      setIsModalOpen(false);
+      setEditingUser(null);
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      
+      // Show success message
+      alert('User updated successfully!');
+    } catch (error) {
+      console.error('Error updating user:', error);
+      alert('Error updating user: ' + (error as Error).message);
+    }
+  };
+
+  const handleSelectUser = (userId: string) => {
+    setSelectedUsers(prev => {
+      if (prev.includes(userId)) {
+        return prev.filter(id => id !== userId);
+      } else {
+        return [...prev, userId];
+      }
+    });
+  };
+
+  const handleSelectAllUsers = () => {
+    if (usersData && selectedUsers.length === usersData.length) {
+      // If all users are selected, deselect all
+      setSelectedUsers([]);
+    } else if (usersData) {
+      // Select all users
+      setSelectedUsers(usersData.map((user: User) => user.id));
+    }
+  };
+
+  const sendEmailToUser = async (user: User, subject: string, content: string) => {
+    try {
+      // Create HTML email content with better formatting
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>${subject}</title>
+            <style>
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+                line-height: 1.6;
+                color: #333;
+                margin: 0;
+                padding: 0;
+                background-color: #f5f7fa;
+              }
+              .email-container {
+                max-width: 600px;
+                margin: 20px auto;
+                background: white;
+                border-radius: 10px;
+                overflow: hidden;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+              }
+              .email-header {
+                background: linear-gradient(135deg, #6C9A7F 0%, #5A8569 100%);
+                color: white;
+                padding: 30px;
+                text-align: center;
+              }
+              .email-header h1 {
+                margin: 0;
+                font-size: 28px;
+                font-weight: 600;
+              }
+              .email-header p {
+                margin: 5px 0 0;
+                opacity: 0.9;
+                font-size: 16px;
+              }
+              .email-body {
+                padding: 30px;
+                background: #ffffff;
+              }
+              .email-body h2 {
+                color: #2D3436;
+                margin-top: 0;
+                font-size: 22px;
+                font-weight: 600;
+              }
+              .email-content {
+                color: #444;
+                font-size: 16px;
+                line-height: 1.7;
+              }
+              .email-button {
+                display: inline-block;
+                padding: 15px 30px;
+                background: #6C9A7F;
+                color: white !important;
+                text-decoration: none;
+                border-radius: 6px;
+                font-weight: 600;
+                margin: 25px 0;
+                text-align: center;
+                transition: all 0.3s ease;
+              }
+              .email-button:hover {
+                background: #5A8569;
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(108, 154, 127, 0.3);
+              }
+              .email-footer {
+                background: #f8f9fa;
+                padding: 25px 30px;
+                text-align: center;
+                border-top: 1px solid #eee;
+                color: #636E72;
+                font-size: 14px;
+              }
+              .email-footer a {
+                color: #6C9A7F;
+                text-decoration: none;
+              }
+              .email-footer a:hover {
+                text-decoration: underline;
+              }
+              .product-image {
+                max-width: 100%;
+                height: auto;
+                border-radius: 8px;
+                margin: 20px 0;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+              }
+              @media (max-width: 600px) {
+                .email-container {
+                  margin: 10px;
+                }
+                .email-header, .email-body, .email-footer {
+                  padding: 20px;
+                }
+              }
+            </style>
+          </head>
+          <body>
+            <div class="email-container">
+              <div class="email-header">
+                <h1>${subject}</h1>
+                <p>Surprise Supermarket</p>
+              </div>
+              <div class="email-body">
+                <h2>Hello ${user.full_name || 'Valued Customer'},</h2>
+                <div class="email-content">
+                  ${content.replace(/\n/g, '<br>')}
+                </div>
+                ${emailData.includeImages ? `
+                  <div style="text-align: center; margin: 30px 0;">
+                    <img src="https://placehold.co/400x200/6C9A7F/white?text=Special+Offer" alt="Special Offer" class="product-image" />
+                  </div>
+                ` : ''}
+                <div style="text-align: center;">
+                  <a href="${process.env.REACT_APP_SITE_URL || 'http://localhost:3000'}" class="email-button">
+                    Visit Our Store
+                  </a>
+                </div>
+              </div>
+              <div class="email-footer">
+                <p>You're receiving this email because you're a valued customer of Surprise Supermarket.</p>
+                <p>
+                  <a href="${process.env.REACT_APP_SITE_URL || 'http://localhost:3000'}/dashboard/customization">Manage your email preferences</a> | 
+                  <a href="${process.env.REACT_APP_SITE_URL || 'http://localhost:3000'}/unsubscribe">Unsubscribe</a>
+                </p>
+                <p>&copy; ${new Date().getFullYear()} Surprise Supermarket. All rights reserved.</p>
+              </div>
+            </div>
+          </body>
+        </html>
+      `;
+
+      // Use the existing email service
+      const sent = await EmailNotificationService['sendEmail'](user.email, subject, htmlContent);
+      
+      if (sent) {
+        // Log notification in database
+        await supabase.from('email_notifications').insert({
+          user_email: user.email,
+          user_name: user.full_name,
+          notification_type: 'admin_message',
+          status: 'sent',
+          sent_at: new Date().toISOString(),
+        });
+      }
+      
+      return sent;
+    } catch (error) {
+      console.error('Error sending email:', error);
+      return false;
+    }
+  };
+
+  const handleSendBulkEmails = async () => {
+    if (!usersData || selectedUsers.length === 0) return;
+    
+    setIsSendingEmails(true);
+    setEmailProgress({ sent: 0, total: selectedUsers.length });
+    
+    try {
+      // Get selected users data
+      const usersToSendEmail = usersData.filter((user: User) => 
+        selectedUsers.includes(user.id)
+      );
+      
+      // Send emails with 2ms delay between each
+      for (let i = 0; i < usersToSendEmail.length; i++) {
+        const user = usersToSendEmail[i];
+        await sendEmailToUser(
+          user, 
+          emailData.subject, 
+          emailData.content
+        );
+        
+        setEmailProgress({ sent: i + 1, total: selectedUsers.length });
+        
+        // Add a small delay between emails
+        if (i < usersToSendEmail.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 2));
+        }
+      }
+      
+      alert(`Successfully sent emails to ${selectedUsers.length} users!`);
+      setIsEmailModalOpen(false);
+      setSelectedUsers([]);
+      setEmailData({ subject: '', content: '', includeImages: false });
+    } catch (error) {
+      console.error('Error sending emails:', error);
+      alert('Error sending emails. Please try again.');
+    } finally {
+      setIsSendingEmails(false);
+    }
+  };
+
+  // Fetch users from Supabase with proper joins to get email from auth.users
+  const { data: usersData, isLoading, refetch } = useQuery({
+    queryKey: ['admin-users', searchTerm, filterRole, filterStatus],
+    queryFn: async () => {
+      try {
+        console.log('Fetching users data...');
+      
+        // Fetch profiles data
+        const { data: profilesData, error: profilesError } = await supabase
+          .from('profiles')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (profilesError) {
+          console.log('Profiles query error:', profilesError);
+          return [];
+        }
+      
+        console.log('Profiles data:', profilesData);
+      
+        // Fetch all orders data in a single query
+        const { data: allOrdersData, error: ordersError } = await supabase
+          .from('orders')
+          .select('user_id, total, status');
+      
+        if (ordersError) {
+          console.error('Error fetching orders:', ordersError);
+          // If we can't fetch orders, return users with zero stats
+          return profilesData?.map((profile: any) => ({
+            ...profile,
+            profile_status: 'active',
+            totalOrders: 0,
+            totalSpent: 0
+          })) || [];
+        }
+      
+        // Group orders by user_id for efficient lookup
+        const ordersByUser = allOrdersData?.reduce((acc: any, order: any) => {
+          if (!acc[order.user_id]) {
+            acc[order.user_id] = [];
+          }
+          acc[order.user_id].push(order);
+          return acc;
+        }, {}) || {};
+      
+        // Map profiles to include order statistics
+        const usersWithStats: User[] = profilesData?.map((profile: any) => {
+          const userOrders = ordersByUser[profile.id] || [];
+          const totalOrders = userOrders.length;
+          const totalSpent = userOrders.reduce((sum: number, order: any) => 
+            sum + (parseFloat(order.total) || 0), 0);
+        
+          return {
+            ...profile,
+            profile_status: 'active',
+            totalOrders,
+            totalSpent
+          };
+        }) || [];
+      
+        // Apply search and filter logic
+        let filteredData: User[] = usersWithStats;
+      
+        // Apply search term filter
+        if (searchTerm) {
+          filteredData = filteredData.filter((user: User) =>
+            user.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            user.email?.toLowerCase().includes(searchTerm.toLowerCase())
+          );
+        }
+      
+        // Apply role filter
+        if (filterRole && filterRole !== 'all') {
+          filteredData = filteredData.filter((user: User) => user.role === filterRole);
+        }
+      
+        // Apply status filter
+        if (filterStatus && filterStatus !== 'all') {
+          filteredData = filteredData.filter((user: User) => user.profile_status === filterStatus);
+        }
+      
+        return filteredData;
+      } catch (error) {
+        console.error('Error fetching users:', error);
+        return [];
+      }
+    },
+    staleTime: 30000, // Consider data stale after 30 seconds
+  });
+
+  // Realtime: refresh users list on profile changes using the useRealtime hook
+  useRealtime({
+    table: 'profiles',
+    events: ['INSERT', 'UPDATE', 'DELETE'],
+    onEvent: (payload) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+    },
+    channelName: 'admin-users-realtime',
+  });
+
+  // Add realtime subscription for orders to update user statistics
+  useRealtime({
+    table: 'orders',
+    events: ['INSERT', 'UPDATE', 'DELETE'],
+    onEvent: (payload) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+    },
+    channelName: 'admin-orders-realtime',
+  });
+
+  // Memoize stats calculation to prevent unnecessary recalculations
+  const stats = React.useMemo(() => {
+    return {
+      totalUsers: usersData?.length || 0,
+      activeUsers: usersData?.filter((user: any) => user.status === 'active').length || 0,
+      newThisMonth: usersData?.filter((user: any) => {
+        const createdDate = new Date(user.created_at);
+        const now = new Date();
+        return createdDate.getMonth() === now.getMonth() && 
+               createdDate.getFullYear() === now.getFullYear();
+      }).length || 0,
+      totalRevenue: usersData?.reduce((sum: number, user: any) => sum + (user.totalSpent || 0), 0) || 0
+    };
+  }, [usersData]);
+
+  const handleViewUser = (user: User) => {
+    setViewingUser(user);
+    setIsViewModalOpen(true);
+  };
+
+  return (
+    <Container>
+      <Header>
+        <Title>Users Management</Title>
+        <HeaderActions>
+          <RefreshButton onClick={() => refetch()} disabled={isLoading}>
+            <FiRefreshCw />
+            Refresh
+          </RefreshButton>
+          {selectedUsers.length > 0 && (
+            <Button onClick={handleBulkEmail}>
+              <FiMail />
+              Email Selected ({selectedUsers.length})
+            </Button>
+          )}
+          <AddUserButton>
+            <FiUserPlus />
+            Add New User
+          </AddUserButton>
+        </HeaderActions>
+      </Header>
+
+      {/* Stats Overview */}
+      <StatsGrid>
+        <StatCard>
+          <StatValue>{stats.totalUsers.toLocaleString()}</StatValue>
+          <StatLabel>Total Users</StatLabel>
+        </StatCard>
+        <StatCard>
+          <StatValue>{stats.activeUsers.toLocaleString()}</StatValue>
+          <StatLabel>Active Users</StatLabel>
+        </StatCard>
+        <StatCard>
+          <StatValue>+{stats.newThisMonth}</StatValue>
+          <StatLabel>New This Month</StatLabel>
+        </StatCard>
+        <StatCard>
+          <StatValue>${stats.totalRevenue.toLocaleString()}</StatValue>
+          <StatLabel>Total Revenue</StatLabel>
+        </StatCard>
+      </StatsGrid>
+
+      {/* Filters */}
+      <FilterBar>
+        <SearchBox>
+          <FiSearch />
+          <input
+            type="text"
+            placeholder="Search users by name or email..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            disabled={isLoading}
+          />
+        </SearchBox>
+
+        <FilterGroup>
+          <Select value={filterRole} onChange={(e) => setFilterRole(e.target.value)} disabled={isLoading}>
+            <option value="all">All Roles</option>
+            <option value="customer">Customers</option>
+            <option value="vendor">Vendors</option>
+            <option value="admin">Admins</option>
+          </Select>
+
+          <Select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} disabled={isLoading}>
+            <option value="all">All Status</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+            <option value="banned">Banned</option>
+          </Select>
+        </FilterGroup>
+      </FilterBar>
+
+      {/* Users Table */}
+      <UsersTable>
+        <TableHeader>
+          <TableRow>
+            <TableHead>
+              <input
+                type="checkbox"
+                checked={usersData ? selectedUsers.length === usersData.length && usersData.length > 0 : false}
+                onChange={handleSelectAllUsers}
+              />
+            </TableHead>
+            <TableHead>User</TableHead>
+            <TableHead>Role</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Total Orders</TableHead>
+            <TableHead>Total Spent</TableHead>
+            <TableHead>Joined Date</TableHead>
+            <TableHead>Last Active</TableHead>
+            <TableHead>Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {isLoading ? (
+            <TableRow>
+              <TableCell colSpan={9} style={{ textAlign: 'center', padding: '2rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+                  <div>Loading users and order data...</div>
+                </div>
+              </TableCell>
+            </TableRow>
+          ) : usersData && (usersData as User[]).length > 0 ? (
+            (usersData as User[]).map((user: User) => (
+              <TableRow key={user.id}>
+                <TableCell>
+                  <input
+                    type="checkbox"
+                    checked={selectedUsers.includes(user.id)}
+                    onChange={() => handleSelectUser(user.id)}
+                  />
+                </TableCell>
+                <TableCell>
+                  <UserInfo>
+                    <UserAvatar>{user.full_name?.charAt(0) || user.email?.charAt(0) || 'U'}</UserAvatar>
+                    <UserDetails>
+                      <UserName>{user.full_name || 'Unnamed User'}</UserName>
+                      <UserEmail>{user.email}</UserEmail>
+                    </UserDetails>
+                  </UserInfo>
+                </TableCell>
+                <TableCell>
+                  <RoleBadge $role={user.role}>{user.role}</RoleBadge>
+                </TableCell>
+                <TableCell>
+                  <StatusBadge $status={user.profile_status}>
+                    {user.profile_status}
+                  </StatusBadge>
+                </TableCell>
+                <TableCell>{user.totalOrders}</TableCell>
+                <TableCell>
+                  <Amount>${user.totalSpent.toLocaleString()}</Amount>
+                </TableCell>
+                <TableCell>{new Date(user.created_at).toLocaleDateString()}</TableCell>
+                <TableCell>
+                  <LastActive>{new Date(user.updated_at).toLocaleDateString()}</LastActive>
+                </TableCell>
+                <TableCell>
+                  <ActionButtons>
+                    <ActionButton title="Send Email" onClick={() => handleSendEmail(user)}>
+                      <FiMail />
+                    </ActionButton>
+                    <ActionButton title="Edit User" onClick={() => handleEditUser(user)}>
+                      <FiEdit2 />
+                    </ActionButton>
+                    <ActionButton $danger title="Delete User" onClick={() => handleDeleteUser(user.id)}>
+                      <FiTrash2 />
+                    </ActionButton>
+                  </ActionButtons>
+                </TableCell>
+              </TableRow>
+            ))
+          ) : (
+            <TableRow>
+              <TableCell colSpan={9} style={{ textAlign: 'center', padding: '2rem' }}>
+                No users found
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </UsersTable>
+
+      {/* User Edit Modal */}
+      {isModalOpen && editingUser && (
+        <ModalOverlay onClick={() => setIsModalOpen(false)}>
+          <ModalContent onClick={(e) => e.stopPropagation()}>
+            <ModalHeader>
+              <h2>Edit User</h2>
+              <CloseButton onClick={() => setIsModalOpen(false)}>
+                <FiX />
+              </CloseButton>
+            </ModalHeader>
+            <ModalBody>
+              <FormRow>
+                <Label>Full Name</Label>
+                <Input
+                  type="text"
+                  value={editingUser.full_name || ''}
+                  onChange={(e) => setEditingUser({...editingUser, full_name: e.target.value})}
+                />
+              </FormRow>
+              <FormRow>
+                <Label>Email</Label>
+                <Input
+                  type="email"
+                  value={editingUser.email || ''}
+                  disabled
+                />
+              </FormRow>
+              <FormRow>
+                <Label>Role</Label>
+                <Select
+                  value={editingUser.role || 'customer'}
+                  onChange={(e) => setEditingUser({...editingUser, role: e.target.value as any})}
+                >
+                  <option value="customer">Customer</option>
+                  <option value="vendor">Vendor</option>
+                  <option value="admin">Admin</option>
+                </Select>
+              </FormRow>
+              <FormRow>
+                <Label>Status</Label>
+                <Select
+                  value={editingUser.profile_status || 'active'}
+                  onChange={(e) => setEditingUser({...editingUser, profile_status: e.target.value as any})}
+                >
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                  <option value="banned">Banned</option>
+                </Select>
+              </FormRow>
+              <FormActions>
+                <Button $secondary onClick={() => setIsModalOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={() => handleSaveUser(editingUser)}>
+                  Save Changes
+                </Button>
+              </FormActions>
+            </ModalBody>
+          </ModalContent>
+        </ModalOverlay>
+      )}
+
+      {/* User View Modal */}
+      {isViewModalOpen && viewingUser && (
+        <ModalOverlay onClick={() => setIsViewModalOpen(false)}>
+          <ModalContent onClick={(e) => e.stopPropagation()}>
+            <ModalHeader>
+              <h2>User Details</h2>
+              <CloseButton onClick={() => setIsViewModalOpen(false)}>
+                <FiX />
+              </CloseButton>
+            </ModalHeader>
+            <ModalBody>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <UserAvatar style={{ width: '60px', height: '60px', fontSize: '1.5rem' }}>
+                    {viewingUser.full_name?.charAt(0) || viewingUser.email?.charAt(0) || 'U'}
+                  </UserAvatar>
+                  <div>
+                    <h3 style={{ margin: '0 0 0.25rem 0' }}>{viewingUser.full_name || 'Unnamed User'}</h3>
+                    <div style={{ color: '#636E72', fontSize: '0.9rem' }}>{viewingUser.email}</div>
+                  </div>
+                </div>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div>
+                    <Label>Role</Label>
+                    <div style={{ padding: '0.75rem', background: '#f8f9fa', borderRadius: '6px' }}>
+                      <RoleBadge $role={viewingUser.role}>{viewingUser.role}</RoleBadge>
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Status</Label>
+                    <div style={{ padding: '0.75rem', background: '#f8f9fa', borderRadius: '6px' }}>
+                      <StatusBadge $status={viewingUser.profile_status}>
+                        {viewingUser.profile_status}
+                      </StatusBadge>
+                    </div>
+                  </div>
+                </div>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div>
+                    <Label>Total Orders</Label>
+                    <div style={{ padding: '0.75rem', background: '#f8f9fa', borderRadius: '6px', fontWeight: '600' }}>
+                      {viewingUser.totalOrders}
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Total Spent</Label>
+                    <div style={{ padding: '0.75rem', background: '#f8f9fa', borderRadius: '6px', fontWeight: '600', color: '#6C9A7F' }}>
+                      ${viewingUser.totalSpent.toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+                
+                <div>
+                  <Label>Member Since</Label>
+                  <div style={{ padding: '0.75rem', background: '#f8f9fa', borderRadius: '6px' }}>
+                    {new Date(viewingUser.created_at).toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric'
+                    })}
+                  </div>
+                </div>
+                
+                <div>
+                  <Label>Last Active</Label>
+                  <div style={{ padding: '0.75rem', background: '#f8f9fa', borderRadius: '6px' }}>
+                    {new Date(viewingUser.updated_at).toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </div>
+                </div>
+              </div>
+              
+              <FormActions>
+                <Button $secondary onClick={() => setIsViewModalOpen(false)}>
+                  Close
+                </Button>
+                <Button onClick={() => {
+                  setIsViewModalOpen(false);
+                  handleEditUser(viewingUser);
+                }}>
+                  Edit User
+                </Button>
+              </FormActions>
+            </ModalBody>
+          </ModalContent>
+        </ModalOverlay>
+      )}
+
+      {/* Bulk Email Modal */}
+      {isEmailModalOpen && (
+        <ModalOverlay onClick={() => setIsEmailModalOpen(false)}>
+          <ModalContent onClick={(e) => e.stopPropagation()}>
+            <ModalHeader>
+              <h2>Send Email</h2>
+              <CloseButton onClick={() => setIsEmailModalOpen(false)}>
+                <FiX />
+              </CloseButton>
+            </ModalHeader>
+            <ModalBody>
+              <FormRow>
+                <Label>To: {selectedUsers.length} users selected</Label>
+                {selectedUsers.length < 5 && usersData && (
+                  <div>
+                    {usersData
+                      .filter((user: User) => selectedUsers.includes(user.id))
+                      .map((user: User) => (
+                        <div key={user.id} style={{ fontSize: '0.9rem', color: '#636E72', marginBottom: '0.25rem' }}>
+                          {user.email}
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </FormRow>
+              
+              <FormRow>
+                <Label>Subject</Label>
+                <Input
+                  type="text"
+                  value={emailData.subject}
+                  onChange={(e) => setEmailData({...emailData, subject: e.target.value})}
+                  placeholder="Email subject"
+                />
+              </FormRow>
+              
+              <FormRow>
+                <Label>Content</Label>
+                <textarea
+                  value={emailData.content}
+                  onChange={(e) => setEmailData({...emailData, content: e.target.value})}
+                  placeholder="Email content"
+                  style={{
+                    width: '100%',
+                    padding: '0.875rem',
+                    border: '1px solid #E1E8ED',
+                    borderRadius: '8px',
+                    fontSize: '1rem',
+                    minHeight: '150px',
+                    fontFamily: 'inherit'
+                  }}
+                />
+              </FormRow>
+              
+              <FormRow>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <input
+                    type="checkbox"
+                    checked={emailData.includeImages}
+                    onChange={(e) => setEmailData({...emailData, includeImages: e.target.checked})}
+                  />
+                  Include product images
+                </label>
+              </FormRow>
+              
+              {isSendingEmails && (
+                <FormRow>
+                  <div style={{ textAlign: 'center', padding: '1rem' }}>
+                    <div>Sending emails... {emailProgress.sent}/{emailProgress.total}</div>
+                    <div style={{ marginTop: '0.5rem' }}>
+                      <div style={{ 
+                        height: '8px', 
+                        backgroundColor: '#E1E8ED', 
+                        borderRadius: '4px', 
+                        overflow: 'hidden' 
+                      }}>
+                        <div style={{ 
+                          height: '100%', 
+                          backgroundColor: '#6C9A7F', 
+                          width: `${(emailProgress.sent / emailProgress.total) * 100}%` 
+                        }} />
+                      </div>
+                    </div>
+                  </div>
+                </FormRow>
+              )}
+              
+              <FormActions>
+                <Button $secondary onClick={() => setIsEmailModalOpen(false)} disabled={isSendingEmails}>
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={handleSendBulkEmails} 
+                  disabled={isSendingEmails || !emailData.subject || !emailData.content}
+                >
+                  {isSendingEmails ? 'Sending...' : 'Send Emails'}
+                </Button>
+              </FormActions>
+            </ModalBody>
+          </ModalContent>
+        </ModalOverlay>
+      )}
+
+    </Container>
+  );
+};
+
+export default AdminUsers;
+
+const Container = styled.div`
+  padding: 2rem;
+`;
+
+const Header = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+`;
+
+const Title = styled.h1`
+  font-size: 2rem;
+  font-weight: 600;
+`;
+
+const HeaderActions = styled.div`
+  display: flex;
+  gap: 0.5rem;
+`;
+
+const Button = styled.button`
+  padding: 0.75rem 1.5rem;
+  background: #6C9A7F;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.3s ease;
+
+  &:hover {
+    background: #5A8569;
+  }
+
+  &[disabled] {
+    background: #E1E8ED;
+    color: #636E72;
+    cursor: not-allowed;
+  }
+
+  &[data-secondary] {
+    background: #E1E8ED;
+    color: #636E72;
+
+    &:hover {
+      background: #D1D5DB;
+    }
+  }
+`;
+
+const AddUserButton = styled(Button)`
+  background: #E1E8ED;
+  color: #636E72;
+
+  &:hover {
+    background: #D1D5DB;
+  }
+`;
+
+const RefreshButton = styled(Button)`
+  background: #E1E8ED;
+  color: #636E72;
+
+  &:hover {
+    background: #D1D5DB;
+  }
+`;
+
+const StatsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-bottom: 1rem;
+`;
+
+const StatCard = styled.div`
+  background: white;
+  border-radius: 10px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+`;
+
+const StatValue = styled.div`
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+`;
+
+const StatLabel = styled.div`
+  font-size: 0.9rem;
+  color: #636E72;
+`;
+
+const FilterBar = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+`;
+
+const SearchBox = styled.div`
+  display: flex;
+  align-items: center;
+  background: white;
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  border: 1px solid #E1E8ED;
+  transition: border 0.3s ease;
+
+  &:focus-within {
+    border: 1px solid #6C9A7F;
+  }
+`;
+
+const FilterGroup = styled.div`
+  display: flex;
+  gap: 0.5rem;
+`;
+
+const Select = styled.select`
+  padding: 0.75rem 1rem;
+  border: 1px solid #E1E8ED;
+  border-radius: 6px;
+  background: white;
+  transition: border 0.3s ease;
+
+  &:focus {
+    border: 1px solid #6C9A7F;
+    outline: none;
+  }
+`;
+
+const UsersTable = styled.table`
+  width: 100%;
+  border-collapse: collapse;
+`;
+
+const TableHeader = styled.thead``;
+
+const TableRow = styled.tr``;
+
+const TableHead = styled.th`
+  padding: 1rem;
+  text-align: left;
+  background: #f8f9fa;
+  border-bottom: 1px solid #E1E8ED;
+`;
+
+const TableBody = styled.tbody``;
+
+const TableCell = styled.td`
+  padding: 1rem;
+  border-bottom: 1px solid #E1E8ED;
+`;
+
+const UserInfo = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+`;
+
+const UserAvatar = styled.div`
+  width: 40px;
+  height: 40px;
+  background: #E1E8ED;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  color: #636E72;
+`;
+
+const UserDetails = styled.div``;
+
+const UserName = styled.div`
+  font-size: 1rem;
+  font-weight: 600;
+`;
+
+const UserEmail = styled.div`
+  font-size: 0.9rem;
+  color: #636E72;
+`;
+
+const RoleBadge = styled.span`
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  color: white;
+
+  &[data-role="customer"] {
+    background: #6C9A7F;
+  }
+
+  &[data-role="vendor"] {
+    background: #E1E8ED;
+    color: #636E72;
+  }
+
+  &[data-role="admin"] {
+    background: #E1E8ED;
+    color: #636E72;
+  }
+`;
+
+const StatusBadge = styled.span`
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  color: white;
+
+  &[data-status="active"] {
+    background: #6C9A7F;
+  }
+
+  &[data-status="inactive"] {
+    background: #E1E8ED;
+    color: #636E72;
+  }
+
+  &[data-status="banned"] {
+    background: #E1E8ED;
+    color: #636E72;
+  }
+`;
+
+const Amount = styled.div`
+  font-size: 1rem;
+  font-weight: 600;
+  color: #6C9A7F;
+`;
+
+const LastActive = styled.div`
+  font-size: 0.9rem;
+  color: #636E72;
+`;
+
+const ActionButtons = styled.div`
+  display: flex;
+  gap: 0.5rem;
+`;
+
+const ActionButton = styled.button`
+  padding: 0.5rem;
+  background: #E1E8ED;
+  color: #636E72;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.3s ease;
+
+  &:hover {
+    background: #D1D5DB;
+  }
+
+  &[data-danger] {
+    background: #E1E8ED;
+    color: #636E72;
+
+    &:hover {
+      background: #F87171;
+      color: white;
+    }
+  }
+`;
+
+const ModalOverlay = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+`;
+
+const ModalContent = styled.div`
+  background: white;
+  border-radius: 10px;
+  padding: 2rem;
+  width: 90%;
+  max-width: 600px;
+`;
+
+const ModalHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+`;
+
+const CloseButton = styled.button`
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.25rem;
+  color: #636E72;
+
+  &:hover {
+    color: #E1E8ED;
+  }
+`;
+
+const ModalBody = styled.div``;
+
+const FormRow = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+`;
+
+const Label = styled.label`
+  font-size: 0.9rem;
+  color: #636E72;
+`;
+
+const Input = styled.input`
+  padding: 0.75rem 1rem;
+  border: 1px solid #E1E8ED;
+  border-radius: 6px;
+  background: white;
+  transition: border 0.3s ease;
+
+  &:focus {
+    border: 1px solid #6C9A7F;
+    outline: none;
+  }
+`;
+
+const FormActions = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+`;

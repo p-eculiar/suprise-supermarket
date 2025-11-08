@@ -1,5 +1,5 @@
 import React from 'react';
-import styled, { keyframes } from 'styled-components';
+import styled, { css, keyframes } from 'styled-components';
 
 // Shimmer animation
 const shimmer = keyframes`
@@ -19,7 +19,7 @@ const SkeletonBase = styled.div`
     #f0f0f0 100%
   );
   background-size: 1000px 100%;
-  animation: ${shimmer} 2s infinite linear;
+  animation: ${css`${shimmer} 2s infinite linear`};
   border-radius: 4px;
 `;
 

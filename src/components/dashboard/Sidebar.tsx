@@ -1,266 +1,188 @@
 import React from 'react';
 import styled from 'styled-components';
-import { NavLink } from 'react-router-dom';
-import { FiGrid, FiPackage, FiMessageSquare, FiClock, FiCreditCard, FiSettings, FiHelpCircle, FiShoppingBag } from 'react-icons/fi';
+import { Link, useLocation } from 'react-router-dom';
+import { 
+  FiHome, 
+  FiShoppingBag, 
+  FiPackage, 
+  FiBarChart2, 
+  FiUsers, 
+  FiSettings,
+  FiLogOut,
+  FiMenu,
+  FiX
+} from 'react-icons/fi';
 import { useAuth } from '../../contexts/AuthContext';
 
-const sidebarNavItems = [
-  { name: 'Dashboard', to: '/dashboard', icon: <FiGrid /> },
-  { name: 'Food Order', to: '/dashboard/orders', icon: <FiPackage /> },
-  { name: 'Feedback', to: '/dashboard/feedback', icon: <FiHelpCircle /> },
-  { name: 'Message', to: '/dashboard/messages', icon: <FiMessageSquare /> },
-  { name: 'Order History', to: '/dashboard/history', icon: <FiClock /> },
-  { name: 'Payment Details', to: '/dashboard/payment', icon: <FiCreditCard /> },
-  { name: 'Customization', to: '/dashboard/customization', icon: <FiSettings /> },
-];
+interface SidebarProps {
+  isOpen: boolean;
+  toggleSidebar: () => void;
+}
 
-const Sidebar: React.FC = () => {
-  const { user } = useAuth();
-  
+const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar }) => {
+  const location = useLocation();
+  const { logout } = useAuth();
+
+  const navItems = [
+    { name: 'Dashboard', icon: <FiHome />, path: '/dashboard' },
+    { name: 'My Orders', icon: <FiShoppingBag />, path: '/dashboard/orders' },
+    { name: 'Order History', icon: <FiPackage />, path: '/dashboard/history' },
+    { name: 'Payment History', icon: <FiBarChart2 />, path: '/dashboard/payment' },
+    { name: 'Messages', icon: <FiUsers />, path: '/dashboard/messages' },
+    { name: 'Feedback', icon: <FiSettings />, path: '/dashboard/feedback' },
+    { name: 'Profile Settings', icon: <FiSettings />, path: '/dashboard/customization' },
+  ];
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      console.error('Failed to log out', error);
+    }
+  };
+
   return (
-    <SidebarContainer>
-      <LogoSection>
-        <LogoImage>
-          <FiShoppingBag />
-        </LogoImage>
-        <LogoText>
-          <BrandName>Surprise</BrandName>
-          <BrandSubtext>Supermarket</BrandSubtext>
-        </LogoText>
-      </LogoSection>
-      
-      <UserInfo>
-        <UserAvatar>
-          {user?.avatar_url ? (
-            <img src={user.avatar_url} alt={user.full_name || 'User'} />
-          ) : (
-            <AvatarPlaceholder>
-              {user?.full_name?.charAt(0) || user?.email?.charAt(0) || 'U'}
-            </AvatarPlaceholder>
-          )}
-        </UserAvatar>
-        <UserDetails>
-          <UserName>{user?.full_name || 'User'}</UserName>
-          <UserEmail>{user?.email}</UserEmail>
-        </UserDetails>
-      </UserInfo>
-      
-      <Nav>
-        {sidebarNavItems.map((item) => (
-          <NavItem key={item.name}>
-            <StyledNavLink to={item.to}>
-              {item.icon}
-              <span>{item.name}</span>
-            </StyledNavLink>
-          </NavItem>
-        ))}
-      </Nav>
-    </SidebarContainer>
+    <>
+      <Overlay isOpen={isOpen} onClick={toggleSidebar} />
+      <SidebarContainer isOpen={isOpen}>
+        <SidebarHeader>
+          <Logo>
+            <LogoImage src="/main-logo.png" alt="Surprise Supermarket Logo" />
+          </Logo>
+          {/* Removed CloseButton as it's redundant with the mobile menu button */}
+        </SidebarHeader>
+
+        <Nav>
+          {navItems.map((item) => (
+            <NavItem 
+              key={item.path}
+              isActive={location.pathname === item.path}
+            >
+              <StyledLink to={item.path} onClick={() => window.innerWidth < 1024 && toggleSidebar()}>
+                {item.icon}
+                <span>{item.name}</span>
+              </StyledLink>
+            </NavItem>
+          ))}
+        </Nav>
+
+        <LogoutButton onClick={handleLogout}>
+          <FiLogOut />
+          <span>Logout</span>
+        </LogoutButton>
+      </SidebarContainer>
+    </>
   );
 };
 
-const SidebarContainer = styled.aside`
+export default Sidebar;
+
+// Styled Components
+const SidebarContainer = styled.div<{ isOpen: boolean }>`
   width: 280px;
   background: linear-gradient(180deg, #6C9A7F 0%, #5A8470 100%);
-  box-shadow: 4px 0 20px rgba(0, 0, 0, 0.08);
-  padding: 2rem 0;
+  color: white;
+  height: 100vh;
+  position: fixed;
+  top: 0;
+  left: ${props => props.isOpen ? '0' : '-280px'};
+  z-index: 1000;
+  transition: left 0.3s ease;
   display: flex;
   flex-direction: column;
-  position: relative;
-  overflow-y: auto;
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
   
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 200px;
-    background: radial-gradient(circle at top right, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
-    pointer-events: none;
+  @media (max-width: 1023px) {
+    left: ${props => props.isOpen ? '0' : '-280px'};
   }
 `;
 
-const LogoSection = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 0 1.5rem 2rem 1.5rem;
-  margin-bottom: 1rem;
-  position: relative;
-  z-index: 1;
-`;
-
-const LogoImage = styled.div`
-  width: 50px;
-  height: 50px;
-  background: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(10px);
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  border: 2px solid rgba(255, 255, 255, 0.3);
+const Overlay = styled.div<{ isOpen: boolean }>`
+  display: ${props => props.isOpen ? 'block' : 'none'};
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 999;
   
-  svg {
-    font-size: 1.8rem;
-    color: white;
+  @media (min-width: 1024px) {
+    display: none;
   }
 `;
 
-const LogoText = styled.div`
-  display: flex;
-  flex-direction: column;
-  line-height: 1.2;
-`;
-
-const BrandName = styled.div`
-  font-size: 1.5rem;
-  font-weight: 800;
-  color: white;
-  letter-spacing: -0.5px;
-`;
-
-const BrandSubtext = styled.div`
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.85);
-  letter-spacing: 0.5px;
-`;
-
-const UserInfo = styled.div`
+const SidebarHeader = styled.div`
+  padding: 1.5rem;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 1.25rem 1.5rem;
-  margin: 0 1rem 1.5rem 1rem;
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(10px);
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  position: relative;
-  z-index: 1;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 `;
 
-const UserAvatar = styled.div`
-  width: 45px;
-  height: 45px;
-  border-radius: 50%;
-  overflow: hidden;
-  flex-shrink: 0;
-  border: 2px solid rgba(255, 255, 255, 0.4);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  
-  img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-`;
-
-const AvatarPlaceholder = styled.div`
-  width: 100%;
-  height: 100%;
-  background: rgba(255, 255, 255, 0.3);
+const Logo = styled.div`
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 1.2rem;
-  font-weight: 700;
-  color: white;
-  text-transform: uppercase;
 `;
 
-const UserDetails = styled.div`
-  flex: 1;
-  min-width: 0;
-`;
-
-const UserName = styled.div`
-  font-size: 1rem;
-  font-weight: 600;
-  color: white;
-  margin-bottom: 0.25rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-`;
-
-const UserEmail = styled.div`
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.75);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+const LogoImage = styled.img`
+  max-width: 100%;
+  height: auto;
+  max-height: 100px;
+  width: auto;
 `;
 
 const Nav = styled.nav`
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  padding: 0 1rem;
-  position: relative;
-  z-index: 1;
+  flex: 1;
+  padding: 1rem 0;
+  overflow-y: auto;
 `;
 
-const NavItem = styled.div``;
+const NavItem = styled.div<{ isActive: boolean }>`
+  background: ${props => props.isActive ? 'rgba(255, 255, 255, 0.1)' : 'transparent'};
+  border-left: 4px solid ${props => props.isActive ? '#fff' : 'transparent'};
+`;
 
-const StyledNavLink = styled(NavLink)`
+const StyledLink = styled(Link)`
   display: flex;
   align-items: center;
   gap: 1rem;
-  padding: 0.9rem 1.25rem;
-  border-radius: 10px;
-  color: rgba(255, 255, 255, 0.85);
+  padding: 1rem 1.5rem;
+  color: white;
   text-decoration: none;
+  transition: all 0.2s ease;
   font-weight: 500;
-  font-size: 0.95rem;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
-
-  svg {
-    font-size: 1.25rem;
-    transition: transform 0.3s ease;
-  }
-
-  &::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 4px;
-    background: white;
-    transform: scaleY(0);
-    transition: transform 0.3s ease;
-  }
-
+  
   &:hover {
-    background: rgba(255, 255, 255, 0.15);
-    color: white;
-    transform: translateX(4px);
-    
-    svg {
-      transform: scale(1.1);
-    }
+    background: rgba(255, 255, 255, 0.1);
   }
-
-  &.active {
-    background: rgba(255, 255, 255, 0.25);
-    color: white;
-    font-weight: 600;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    
-    &::before {
-      transform: scaleY(1);
-    }
-    
-    svg {
-      transform: scale(1.15);
-    }
+  
+  svg {
+    min-width: 24px;
   }
 `;
 
-export default Sidebar;
+const LogoutButton = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  color: white;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: auto;
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+  
+  svg {
+    min-width: 24px;
+  }
+`;

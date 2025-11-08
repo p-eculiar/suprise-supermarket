@@ -1,5 +1,6 @@
 import React from 'react';
 import { Toaster, toast as hotToast } from 'react-hot-toast';
+import { useSettings } from '../../contexts/SettingsContext';
 
 export const ToastProvider: React.FC = () => {
   return (
@@ -114,8 +115,11 @@ export const toast = {
   },
   
   // Cart-specific toasts
-  addedToCart: (productName: string) => {
-    hotToast.success(`${productName} added to cart!`, {
+  addedToCart: (productName: string, totalAmount?: number, quantity?: number, currencySymbol?: string) => {
+    const suffix = typeof totalAmount === 'number' && typeof quantity === 'number'
+      ? ` × ${quantity} • Total ${currencySymbol || '₦'}${totalAmount.toFixed(2)}`
+      : '';
+    hotToast.success(`${productName} added to cart!${suffix ? ` (${suffix})` : ''}`, {
       icon: '🛒',
       duration: 2500,
     });

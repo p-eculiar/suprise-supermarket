@@ -8,7 +8,7 @@ const services = [
   {
     icon: <FiShoppingBag size={40} />,
     title: 'Easy to shop',
-    description: 'We have a more than 50,000 products from best brands in our  store to serve your need.'
+    description: 'We have a more than 100+ products from best brands in our  store to serve your need.'
   },
   {
     icon: <FiTruck size={40} />,
@@ -38,6 +38,9 @@ const features = [
 ];
 
 const AboutPage: React.FC = () => {
+  // Track broken images
+  const [brokenImages, setBrokenImages] = useState<Set<string>>(new Set());
+
   return (
     <PageWrapper>
       {/* Hero Section */}
@@ -65,8 +68,8 @@ const AboutPage: React.FC = () => {
               <SectionLabel>ABOUT US</SectionLabel>
               <SectionHeading>We help you to serve your daily needs.</SectionHeading>
               <SectionText>
-                Just order from thousands of products in your nearby convenience mart to get a doorstep 
-                delivery within 2 hours. We care about your needs and make sure you get the best quality 
+                At Suprise supermarket just order from thousands of products in your nearby convenience mart to get a doorstep
+                delivery within 2 hours. We care about your needs and make sure you get the best quality
                 products at affordable prices.
               </SectionText>
               <LearnMoreButton to="/products">
@@ -79,7 +82,14 @@ const AboutPage: React.FC = () => {
               viewport={{ once: true }}
               transition={{ duration: 0.8, delay: 0.2 }}
             >
-              <RoundedImage src="https://images.unsplash.com/photo-1610348725531-843dff563e2c?w=600&auto=format&fit=crop&q=80" alt="Fresh Produce" />
+              <RoundedImage
+                src="https://images.unsplash.com/photo-1610348725531-843dff563e2c?w=600&auto=format&fit=crop&q=80"
+                alt="Fresh Produce"
+                onError={(e: any) => {
+                  e.currentTarget.style.objectFit = 'contain';
+                  e.currentTarget.style.backgroundColor = '#f0f0f0';
+                }}
+              />
             </ImageColumn>
           </TwoColumnGrid>
         </ContentContainer>
@@ -95,40 +105,25 @@ const AboutPage: React.FC = () => {
             transition={{ duration: 0.8 }}
           >
             <MilestoneLabel>WELCOME TO</MilestoneLabel>
-            <MilestoneHeading>25 Years Providing Grocery Service.</MilestoneHeading>
-            <MilestoneText>
-              Lorem Ipsum is simply text of the printing and typesetting of an industry. Lorem Ipsum 
-              has been the industry's standard dummy text.
-            </MilestoneText>
+            <MilestoneHeading>7 Years Providing Grocery Service.</MilestoneHeading>
             <MilestoneFacts>
               <Fact>
                 <FactIcon><FiShoppingBag /></FactIcon>
                 <FactContent>
-                  <FactNumber>10,000+</FactNumber>
+                  <FactNumber>100+</FactNumber>
                   <FactLabel>HAPPY CUSTOMER COME SHOP</FactLabel>
                 </FactContent>
               </Fact>
               <Fact>
                 <FactIcon><FiPackage /></FactIcon>
                 <FactContent>
-                  <FactNumber>50,000+</FactNumber>
+                  <FactNumber>1,000+</FactNumber>
                   <FactLabel>FRESH PRODUCT ALWAYS AVAILABLE</FactLabel>
                 </FactContent>
               </Fact>
             </MilestoneFacts>
           </MilestoneCard>
 
-          <VideoSection
-            initial={{ opacity: 0, scale: 0.9 }}
-            whileInView={{ opacity: 1, scale: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.8, delay: 0.3 }}
-          >
-            <VideoThumbnail src="https://images.unsplash.com/photo-1542838132-92c53300491e?w=800&auto=format&fit=crop&q=80" alt="Store Video" />
-            <PlayButton>
-              <FiPlay />
-            </PlayButton>
-          </VideoSection>
         </ContentContainer>
       </SectionLight>
 
@@ -144,7 +139,7 @@ const AboutPage: React.FC = () => {
             <ServiceLabel>TEAM SERVICES</ServiceLabel>
             <ServiceHeading>Grocery service you can count on</ServiceHeading>
           </CenteredHeader>
-          
+
           <ServicesGrid>
             {services.map((service, index) => (
               <ServiceCard
@@ -154,7 +149,14 @@ const AboutPage: React.FC = () => {
                 viewport={{ once: true }}
                 transition={{ duration: 0.5, delay: index * 0.1 }}
               >
-                <ServiceImage src={`https://images.unsplash.com/photo-${index === 0 ? '1542838132-92c53300491e' : index === 1 ? '1604719312-6edb2016de7e' : '1553531384-cc64ac80f931'}?w=400&auto=format&fit=crop&q=80`} alt={service.title} />
+                <ServiceImage
+                  src={`https://images.unsplash.com/photo-${index === 0 ? '1542838132-92c53300491e' : index === 1 ? '1604719312-6edb2016de7e' : '1553531384-cc64ac80f931'}?w=400&auto=format&fit=crop&q=80`}
+                  alt={service.title}
+                  onError={(e: any) => {
+                    e.currentTarget.style.objectFit = 'contain';
+                    e.currentTarget.style.backgroundColor = '#f0f0f0';
+                  }}
+                />
                 <ServiceContent>
                   <ServiceIcon>{service.icon}</ServiceIcon>
                   <ServiceTitle>{service.title}</ServiceTitle>
@@ -163,7 +165,7 @@ const AboutPage: React.FC = () => {
               </ServiceCard>
             ))}
           </ServicesGrid>
-          
+
           <CenteredButton>
             <ViewAllButton to="/services">View All Services</ViewAllButton>
           </CenteredButton>
@@ -180,7 +182,14 @@ const AboutPage: React.FC = () => {
               viewport={{ once: true }}
               transition={{ duration: 0.8 }}
             >
-              <RoundedImage src="https://images.unsplash.com/photo-1556742044-3c52d6e88c62?w=600&auto=format&fit=crop&q=80" alt="Delivery Person" />
+              <RoundedImage
+                src="https://images.unsplash.com/photo-1556742044-3c52d6e88c62?w=600&auto=format&fit=crop&q=80"
+                alt="Delivery Person"
+                onError={(e: any) => {
+                  e.currentTarget.style.objectFit = 'contain';
+                  e.currentTarget.style.backgroundColor = '#f0f0f0';
+                }}
+              />
             </ImageColumn>
             <TextColumn
               initial={{ opacity: 0, x: 50 }}
@@ -191,8 +200,9 @@ const AboutPage: React.FC = () => {
               <SectionLabel>TEAM SERVICES</SectionLabel>
               <SectionHeading>We serve till the doorstep.</SectionHeading>
               <SectionText>
-                Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore Lorem ipsum, 
-                dolor sit amet consectetur adipisicing elit. Deserunt hic aliquid fugiat consectetur nemo itaque.
+                Enjoy fast and reliable grocery delivery anywhere in Port Harcourt.
+                At Suprise Supermarket, your favorite products come straight to your door.fresh, affordable, and right on time.
+                Shop online today and experience 2 hour doorstep delivery you can trust.
               </SectionText>
               <FeaturesList>
                 {features.map((feature, index) => (
@@ -223,7 +233,14 @@ const AboutPage: React.FC = () => {
                 <PromoText>All kinds of smart super market are available at Dailyfresh</PromoText>
                 <ShopNowButton>Shop Now</ShopNowButton>
               </PromoContent>
-              <PromoImage src="https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=300&auto=format&fit=crop&q=80" alt="Discount" />
+              <PromoImage
+                src="https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=300&auto=format&fit=crop&q=80"
+                alt="Discount"
+                onError={(e: any) => {
+                  e.currentTarget.style.objectFit = 'contain';
+                  e.currentTarget.style.backgroundColor = '#f0f0f0';
+                }}
+              />
             </PromoCard>
 
             <PromoCard
@@ -238,7 +255,14 @@ const AboutPage: React.FC = () => {
                 <PromoText>We provide  all kinds of fresh fruit products</PromoText>
                 <ShopNowButton>Shop Now</ShopNowButton>
               </PromoContent>
-              <PromoImage src="https://images.unsplash.com/photo-1619566636858-adf3ef46400b?w=300&auto=format&fit=crop&q=80" alt="Fruits" />
+              <PromoImage
+                src="https://images.unsplash.com/photo-1619566636858-adf3ef46400b?w=300&auto=format&fit=crop&q=80"
+                alt="Fruits"
+                onError={(e: any) => {
+                  e.currentTarget.style.objectFit = 'contain';
+                  e.currentTarget.style.backgroundColor = '#f0f0f0';
+                }}
+              />
             </PromoCard>
           </PromotionsGrid>
         </ContentContainer>
@@ -675,7 +699,7 @@ interface PromoCardProps {
   $bg: string;
 }
 
-const PromoCard = styled(motion.div)<PromoCardProps>`
+const PromoCard = styled(motion.div) <PromoCardProps>`
   background: ${props => props.$bg};
   border-radius: 16px;
   padding: 2.5rem 2rem;

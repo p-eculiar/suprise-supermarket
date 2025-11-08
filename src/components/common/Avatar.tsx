@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import styled from 'styled-components';
 
 export interface AvatarProps {
@@ -8,27 +8,6 @@ export interface AvatarProps {
   alt?: string;
   onClick?: () => void;
 }
-
-export const Avatar: React.FC<AvatarProps> = ({ src, name, size = 'md', alt, onClick }) => {
-  const getInitials = (name?: string) => {
-    if (!name) return '?';
-    const parts = name.split(' ');
-    if (parts.length >= 2) {
-      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-    }
-    return name.substring(0, 2).toUpperCase();
-  };
-
-  return (
-    <AvatarContainer $size={size} onClick={onClick} style={{ cursor: onClick ? 'pointer' : 'default' }}>
-      {src ? (
-        <AvatarImage src={src} alt={alt || name || 'Avatar'} />
-      ) : (
-        <AvatarInitials $size={size}>{getInitials(name)}</AvatarInitials>
-      )}
-    </AvatarContainer>
-  );
-};
 
 const sizeMap = {
   sm: '32px',
@@ -44,6 +23,11 @@ const fontSizeMap = {
   xl: '1.75rem',
 };
 
+const AvatarWrapper = styled.div`
+  position: relative;
+  display: inline-block;
+`;
+
 const AvatarContainer = styled.div<{ $size: 'sm' | 'md' | 'lg' | 'xl' }>`
   width: ${({ $size }) => sizeMap[$size]};
   height: ${({ $size }) => sizeMap[$size]};
@@ -54,6 +38,8 @@ const AvatarContainer = styled.div<{ $size: 'sm' | 'md' | 'lg' | 'xl' }>`
   justify-content: center;
   background-color: ${({ theme }) => theme.colors.primary.light};
   flex-shrink: 0;
+  border: 2px solid white;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 `;
 
 const AvatarImage = styled.img`
@@ -68,3 +54,65 @@ const AvatarInitials = styled.div<{ $size: 'sm' | 'md' | 'lg' | 'xl' }>`
   font-weight: 600;
   user-select: none;
 `;
+
+const AvatarName = styled.div`
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  z-index: 100;
+  margin-top: 4px;
+  
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 4px;
+    border-style: solid;
+    border-color: transparent transparent rgba(0, 0, 0, 0.8) transparent;
+  }
+`;
+
+export const Avatar: React.FC<AvatarProps> = ({ src, name, size = 'md', alt, onClick }) => {
+  const [showName, setShowName] = useState(false);
+  
+  const getInitials = (name?: string) => {
+    if (!name) return '?';
+    const parts = name.split(' ');
+    if (parts.length >= 2) {
+      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  };
+
+  return (
+    <AvatarWrapper>
+      <AvatarContainer 
+        $size={size} 
+        onClick={onClick} 
+        style={{ cursor: onClick ? 'pointer' : 'default' }}
+        onMouseEnter={() => setShowName(true)}
+        onMouseLeave={() => setShowName(false)}
+        onTouchStart={() => setShowName(true)}
+        onTouchEnd={() => setShowName(false)}
+      >
+        {src ? (
+          <AvatarImage src={src} alt={alt || name || 'Avatar'} />
+        ) : (
+          <AvatarInitials $size={size}>{getInitials(name)}</AvatarInitials>
+        )}
+      </AvatarContainer>
+      {name && showName && (
+        <AvatarName>{name}</AvatarName>
+      )}
+    </AvatarWrapper>
+  );
+};

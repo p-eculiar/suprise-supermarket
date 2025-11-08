@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import styled from 'styled-components';
 import { useAuth } from '../contexts/AuthContext';
 import { Container, Section, Heading, Text, Button, Input, Avatar } from '../components/common';
 import toast from '../components/common/Toast';
 import { FiUser, FiMail, FiEdit2, FiSave, FiLock, FiClock, FiPackage } from 'react-icons/fi';
+import { userService } from '../services/userService';
 
 const ProfilePage: React.FC = () => {
   const { user, updateProfile } = useAuth();
@@ -15,6 +16,21 @@ const ProfilePage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [recentOrders, setRecentOrders] = useState<any[]>([]);
+
+  useEffect(() => {
+    const loadOrders = async () => {
+      if (!user) return;
+      try {
+        const orders = await userService.getUserOrders(user.id, 5);
+        setRecentOrders(orders || []);
+      } catch (e) {
+        // swallow errors for orders list; keep profile usable
+        setRecentOrders([]);
+      }
+    };
+    loadOrders();
+  }, [user]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -52,7 +68,7 @@ const ProfilePage: React.FC = () => {
       <Section>
         <Container>
           <ProfileHeader>
-            <Avatar size="xl" src={(user as any).avatar} name={user.full_name || user.email} />
+            <Avatar size="xl" src={(user as any).avatar_url} name={user.full_name || user.email} />
             <div>
               <Heading as="h1" size="2xl">
                 {isEditing ? (
@@ -109,7 +125,7 @@ const ProfilePage: React.FC = () => {
                 <InfoItem>
                   <InfoLabel>Member Since</InfoLabel>
                   <InfoValue>
-                    {(user as any).createdAt ? new Date((user as any).createdAt).toLocaleDateString() : 'N/A'}
+                    {(user as any).created_at ? new Date((user as any).created_at).toLocaleDateString() : 'N/A'}
                   </InfoValue>
                 </InfoItem>
               </InfoGrid>
@@ -120,13 +136,31 @@ const ProfilePage: React.FC = () => {
                 <FiPackage />
                 <h2>Recent Orders</h2>
               </SectionHeader>
-              <EmptyState>
-                <FiPackage size={48} />
-                <Text>No orders yet</Text>
-                <Button variant="primary" to="/products">
-                  Start Shopping
-                </Button>
-              </EmptyState>
+              {recentOrders.length === 0 ? (
+                <EmptyState>
+                  <FiPackage size={48} />
+                  <Text>No orders yet</Text>
+                  <Button variant="primary" to="/products">
+                    Start Shopping
+                  </Button>
+                </EmptyState>
+              ) : (
+                <OrdersList>
+                  {recentOrders.map((order: any) => (
+                    <OrderItem key={order.id}>
+                      <div>
+                        <strong>Order #{order.id.slice(0, 8)}</strong>
+                        <div>
+                          {new Date(order.created_at).toLocaleString()} • {order.status}
+                        </div>
+                      </div>
+                      <div>
+                        ₦{Number(order.total || 0).toLocaleString()}
+                      </div>
+                    </OrderItem>
+                  ))}
+                </OrdersList>
+              )}
             </ProfileSection>
           </ProfileSections>
         </Container>
@@ -243,4 +277,18 @@ const SuccessMessage = styled.div`
   display: flex;
   align-items: center;
   gap: 0.5rem;
+`;
+
+const OrdersList = styled.div`
+  display: grid;
+  gap: 0.75rem;
+`;
+
+const OrderItem = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border: 1px solid ${({ theme }) => theme.colors.border?.main || theme.colors.common.gray[300]};
+  border-radius: ${({ theme }) => theme.radii.md};
 `;

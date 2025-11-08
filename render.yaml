@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: email-proxy
+    env: python
+    buildCommand: pip install flask flask-cors requests python-dotenv
+    startCommand: python email-proxy.py
+    envVars:
+      - key: RESEND_API_KEY
+        sync: false
+      - key: FROM_EMAIL
+        sync: false
+      - key: PORT
+        value: 3001

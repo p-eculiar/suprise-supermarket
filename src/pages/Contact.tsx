@@ -3,6 +3,8 @@ import styled from 'styled-components';
 import { motion } from 'framer-motion';
 import { FiMapPin, FiPhone, FiMail, FiClock, FiSend, FiUser, FiMessageSquare } from 'react-icons/fi';
 import { Link } from 'react-router-dom';
+import { contactApi } from '../services/api';
+import toast from '../components/common/Toast';
 
 const Contact: React.FC = () => {
   const [formData, setFormData] = useState({
@@ -24,14 +26,27 @@ const Contact: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
-    // Simulate API call
-    setTimeout(() => {
-      console.log('Form submitted:', formData);
+
+    try {
+      const { success, message } = await contactApi.submitContactForm({
+        name: formData.name,
+        email: formData.email,
+        subject: formData.subject,
+        message: formData.message
+      });
+
+      if (success) {
+        toast.success('Thank you for contacting us! We\'ll get back to you soon.');
+        setFormData({ name: '', email: '', phone: '', subject: '', message: '' });
+      } else {
+        toast.error(message || 'Failed to submit form. Please try again.');
+      }
+    } catch (error: any) {
+      console.error('Contact form error:', error);
+      toast.error(error.message || 'Failed to submit form. Please try again.');
+    } finally {
       setIsSubmitting(false);
-      setFormData({ name: '', email: '', phone: '', subject: '', message: '' });
-      alert('Thank you for contacting us! We\'ll get back to you soon.');
-    }, 1500);
+    }
   };
 
   return (
@@ -62,8 +77,10 @@ const Contact: React.FC = () => {
             </InfoIcon>
             <InfoContent>
               <InfoTitle>Visit Our Store</InfoTitle>
-              <InfoText>123 Supermarket Street</InfoText>
-              <InfoText>City, State 12345</InfoText>
+              <strong>Suprise Supermarket</strong><br />
+              6 Farm Road<br />
+              Off Ada George, Port Harcourt<br />
+              Rivers State, Nigeria
             </InfoContent>
           </InfoCard>
 
@@ -78,8 +95,8 @@ const Contact: React.FC = () => {
             </InfoIcon>
             <InfoContent>
               <InfoTitle>Call Us</InfoTitle>
-              <InfoText>+1 (234) 567-8900</InfoText>
-              <InfoText>+1 (234) 567-8901</InfoText>
+              <InfoText>(+234) 8084888899</InfoText>
+              <InfoText>(+234) 7017653903</InfoText>
             </InfoContent>
           </InfoCard>
 
@@ -94,8 +111,8 @@ const Contact: React.FC = () => {
             </InfoIcon>
             <InfoContent>
               <InfoTitle>Email Us</InfoTitle>
-              <InfoText>info@suprisesupermarket.com</InfoText>
-              <InfoText>support@suprisesupermarket.com</InfoText>
+              <InfoText>chikwendupeculiar66@gmail.com</InfoText>
+              <InfoText>surpry1980@yahoo.com</InfoText>
             </InfoContent>
           </InfoCard>
 
@@ -110,8 +127,8 @@ const Contact: React.FC = () => {
             </InfoIcon>
             <InfoContent>
               <InfoTitle>Working Hours</InfoTitle>
-              <InfoText>Mon - Fri: 8:00 AM - 8:00 PM</InfoText>
-              <InfoText>Sat - Sun: 9:00 AM - 6:00 PM</InfoText>
+              <InfoText>Mon - Fri: 12:00 AM - 10:00 PM</InfoText>
+              <InfoText>Sat - Sun: 11:00 AM - 10:00 PM</InfoText>
             </InfoContent>
           </InfoCard>
         </InfoGrid>
@@ -144,7 +161,7 @@ const Contact: React.FC = () => {
                       value={formData.name}
                       onChange={handleChange}
                       required
-                      placeholder="John Doe"
+                      placeholder="Name"
                     />
                   </InputWrapper>
                 </FormGroup>
@@ -162,7 +179,7 @@ const Contact: React.FC = () => {
                       value={formData.email}
                       onChange={handleChange}
                       required
-                      placeholder="john@example.com"
+                      placeholder="surpry1980@yahoo.com"
                     />
                   </InputWrapper>
                 </FormGroup>
@@ -181,7 +198,7 @@ const Contact: React.FC = () => {
                       name="phone"
                       value={formData.phone}
                       onChange={handleChange}
-                      placeholder="+1 (234) 567-8900"
+                      placeholder="(+234) 8084888899"
                     />
                   </InputWrapper>
                 </FormGroup>
@@ -244,7 +261,7 @@ const Contact: React.FC = () => {
             <MapWrapper>
               <iframe
                 title="Store Location"
-                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3022.215209132234!2d-73.98784472425252!3d40.74844097138986!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x89c259a9b3117469%3A0xd134e199a405a163!2sEmpire%20State%20Building!5e0!3m2!1sen!2sus!4v1623456789012!5m2!1sen!2sus"
+                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3975.741070398915!2d7.032193314763199!3d4.832200996449195!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x1069d1c0f22e2d65%3A0x3d0b5c0b5c0b5c0b!2s6%20Farm%20Rd%2C%20Port%20Harcourt!5e0!3m2!1sen!2sng!4v1650000000000!5m2!1sen!2sng"
                 width="100%"
                 height="100%"
                 style={{ border: 0 }}

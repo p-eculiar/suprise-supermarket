@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import styled, { ThemeProvider, DefaultTheme } from 'styled-components';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
@@ -7,6 +7,16 @@ import { FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { useCart } from '../contexts/CartContext';
 import toast from '../components/common/Toast';
 import { productService, Product } from '../services/productService';
+import AIChatbot from '../components/common/AIChatbot';
+import { useAuth } from '../contexts/AuthContext';
+import { handleAddToCart } from '../utils/cartHelpers';
+import { useRealtime } from '../hooks/useRealtime';
+import { supabase } from '../lib/supabase';
+import { useMultipleLoadingStates } from '../hooks/useLoadingState';
+import { HomePageLoader, ProductCardLoader } from '../components/common/GranularLoading';
+import { useSettings } from '../contexts/SettingsContext';
+import { debounce, throttle } from '../utils/performance';
+import { performanceMonitor } from '../utils/performanceMonitor';
 
 // Styled Components
 const ProductCard = styled.div`
@@ -33,7 +43,7 @@ const containerVariants = {
   visible: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.2
+      staggerChildren: 0.1 // Reduced from 0.2 for faster animations
     }
   }
 };
@@ -44,7 +54,7 @@ const itemVariants = {
     y: 0,
     opacity: 1,
     transition: {
-      duration: 0.5
+      duration: 0.3 // Reduced from 0.5 for faster animations
     }
   }
 };
@@ -52,39 +62,604 @@ const itemVariants = {
 const Home: React.FC = () => {
   const navigate = useNavigate();
   const { addToCart } = useCart();
+  const { isLoading: authLoading, isAuthenticated, user } = useAuth();
+  const { formatCurrency } = useSettings();
   const [selectedCategory, setSelectedCategory] = useState('');
   const [activeTab, setActiveTab] = useState<'featured' | 'bestsellers' | 'popular'>('featured');
   const categoriesScrollRef = useRef<HTMLDivElement>(null);
   const productsScrollRef = useRef<HTMLDivElement>(null);
+  const dealsScrollRef = useRef<HTMLDivElement>(null);
+  const [productCategories, setProductCategories] = useState<string[]>([]);
+  const [homeCategories, setHomeCategories] = useState<Array<{ name: string; count: number; image_url?: string }>>([]);
+  const [isCategoryOpen, setIsCategoryOpen] = useState(false);
   
   // Real data states
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
   const [bestSellerProducts, setBestSellerProducts] = useState<Product[]>([]);
   const [popularProducts, setPopularProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  // Load products from database
+  const [dealsProducts, setDealsProducts] = useState<Product[]>([]);
+  
+  // Granular loading states for different sections
+  const loadingStates = useMultipleLoadingStates();
+  
+  // Initialize loading states for different sections - only run once
   useEffect(() => {
-    loadProducts();
+    console.log('🔄 Initializing loading states');
+    const keys = [
+      'featured',
+      'bestsellers',
+      'popular',
+      'deals',
+      'categories',
+      'promos',
+      'features'
+    ];
+    
+    // Initialize all loading states to true
+    keys.forEach(key => {
+      console.log('Setting loading state for', key, 'to true');
+      loadingStates.setLoading(key, true);
+    });
+    console.log('✅ Loading states initialized');
+  }, []); // Empty dependency array to run only once
+  
+  const [loading, setLoading] = useState(true);
+  // Promo banner images from DB
+  const [promoVegImage, setPromoVegImage] = useState<string | null>(null);
+  const [promoRightImage, setPromoRightImage] = useState<string | null>(null);
+  const [featureCards, setFeatureCards] = useState<Array<{ title: string; label: string; image_url: string; category: string }>>([]);
+  // Track category images that failed to load so we can show emoji fallback
+  const [brokenCategoryImages, setBrokenCategoryImages] = useState<Set<string>>(new Set());
+  // Track product images that failed to load
+  const [brokenProductImages, setBrokenProductImages] = useState<Set<string>>(new Set());
+  // Track deal images that failed to load
+  const [brokenDealImages, setBrokenDealImages] = useState<Set<string>>(new Set());
+
+  // Create a function to clear product service cache
+  const clearProductCache = useCallback(() => {
+    productService.clearCache();
   }, []);
+
+  // Clear cache when user authentication state changes
+  useEffect(() => {
+    clearProductCache();
+  }, [isAuthenticated, user, clearProductCache]);
+
+  // Memoized product data to prevent unnecessary re-renders
+  const memoizedProducts = useMemo(() => ({
+    featured: featuredProducts,
+    bestsellers: bestSellerProducts,
+    popular: popularProducts,
+    deals: dealsProducts
+  }), [featuredProducts, bestSellerProducts, popularProducts, dealsProducts]);
+
+  // Optimized product loading with performance monitoring
+  const loadAllProducts = useCallback(async () => {
+    const stopTiming = performanceMonitor.startTiming('loadAllProducts');
+    
+    try {
+      console.log('🔄 Loading products from database...');
+      
+      // Load all product types in parallel for better performance
+      const [
+        featuredData,
+        bestsellersData,
+        popularData,
+        dealsData
+      ] = await Promise.all([
+        productService.getFeaturedProducts(6),
+        productService.getBestsellers(6),
+        productService.getPopularProducts(6),
+        productService.getDealsOfTheWeek(3)
+      ]);
+      
+      console.log('✅ All products loaded:', {
+        featured: featuredData.length,
+        bestsellers: bestsellersData.length,
+        popular: popularData.length,
+        deals: dealsData.length
+      });
+      
+      // Update state in batch to minimize re-renders
+      setFeaturedProducts(featuredData);
+      setBestSellerProducts(bestsellersData);
+      setPopularProducts(popularData);
+      setDealsProducts(dealsData);
+      
+      // Update loading states
+      loadingStates.setLoading('featured', false);
+      loadingStates.setLoading('bestsellers', false);
+      loadingStates.setLoading('popular', false);
+      loadingStates.setLoading('deals', false);
+      
+    } catch (error) {
+      console.error('❌ Error loading products:', error);
+      // Set empty arrays on error to prevent app crash
+      setFeaturedProducts([]);
+      setBestSellerProducts([]);
+      setPopularProducts([]);
+      setDealsProducts([]);
+      
+      // Update loading states
+      loadingStates.setLoading('featured', false);
+      loadingStates.setLoading('bestsellers', false);
+      loadingStates.setLoading('popular', false);
+      loadingStates.setLoading('deals', false);
+    } finally {
+      stopTiming();
+    }
+  }, [loadingStates]);
+
+  // Debounced product loading to prevent excessive calls
+  const debouncedLoadAllProducts = useMemo(
+    () => debounce(loadAllProducts, 300),
+    [loadAllProducts]
+  );
+
+  // Load products when component mounts
+  useEffect(() => {
+    debouncedLoadAllProducts();
+  }, [debouncedLoadAllProducts]);
+
+  useEffect(() => {
+    debouncedLoadAllProducts();
+  }, [debouncedLoadAllProducts]);
+
+  // Load categories with images from products
+  const loadCategories = async () => {
+    try {
+      loadingStates.setLoading('categories', true);
+      console.log('🔄 Loading categories from database...');
+      
+      // First, try to get all products to understand what we're working with
+      const { data: allProducts, error: productsError } = await supabase
+        .from('products')
+        .select('category, active, image_url')
+        .eq('active', true);
+      
+      if (productsError) {
+        console.error('❌ Error fetching products for categories:', productsError);
+      } else {
+        console.log('📊 Found', allProducts?.length || 0, 'active products');
+      }
+      
+      // Prefer explicit categories table (with optional image), else group products
+      const { data: catRows, error: catErr } = await supabase
+        .from('categories')
+        .select('name, image_url')
+        .order('name', { ascending: true });
+
+      let processedCategories: string[] = [];
+      let categoriesWithMeta: Array<{ name: string; count: number; image_url?: string }> = [];
+
+      if (!catErr && catRows && catRows.length > 0) {
+        console.log('📋 Found categories table with', catRows.length, 'categories');
+        // Count products per category and get first image
+        const counts = new Map<string, number>();
+        const images = new Map<string, string>();
+        
+        allProducts?.forEach((p: any) => {
+          counts.set(p.category, (counts.get(p.category) || 0) + 1);
+          // Set image if not already set and product has image
+          if (!images.has(p.category) && p.image_url) {
+            images.set(p.category, p.image_url);
+          }
+        });
+
+        // Filter out categories that don't have any products
+        const categoriesWithProducts = (catRows as any[]).filter((cat: any) => 
+          counts.get(cat.name) && counts.get(cat.name)! > 0
+        );
+        
+        console.log('✅ Categories with products:', categoriesWithProducts.length);
+
+        categoriesWithMeta = categoriesWithProducts.map((r: any) => ({
+          name: r.name,
+          image_url: r.image_url || images.get(r.name), // Use category image or first product image
+          count: counts.get(r.name) || 0,
+        }));
+        processedCategories = categoriesWithMeta.map(c => c.name);
+      } else {
+        console.log('📋 No categories table or error, using product service to get categories');
+        // Get unique categories from all products
+        const uniqueCategories = Array.from(new Set(allProducts?.map((p: any) => p.category).filter(Boolean))) as string[];
+        processedCategories = uniqueCategories;
+        
+        // Build counts and get first image for each category
+        const counts = new Map<string, number>();
+        const images = new Map<string, string>();
+        
+        allProducts?.forEach((p: any) => {
+          counts.set(p.category, (counts.get(p.category) || 0) + 1);
+          // Set image if not already set and product has image
+          if (!images.has(p.category) && p.image_url) {
+            images.set(p.category, p.image_url);
+          }
+        });
+        
+        categoriesWithMeta = processedCategories.map(name => ({
+          name,
+          count: counts.get(name) || 0,
+          image_url: images.get(name)
+        }));
+      }
+      
+      console.log('📊 Categories updated:', categoriesWithMeta);
+      console.log('📊 Categories count:', categoriesWithMeta.length);
+      
+      setProductCategories(processedCategories);
+      setHomeCategories(categoriesWithMeta);
+      loadingStates.setLoading('categories', false);
+    } catch (error) {
+      console.error('❌ Error loading categories:', error);
+      setProductCategories([]);
+      setHomeCategories([]);
+      loadingStates.setLoading('categories', false);
+    }
+  };
+
+  // Load promo images
+  const loadPromoImages = async () => {
+    try {
+      loadingStates.setLoading('promos', true);
+      console.log('🔄 Loading promo images...');
+      
+      // Get promo images from banners table
+      const { data: banners, error } = await supabase
+        .from('banners')
+        .select('name, image_url, active')
+        .eq('active', true)
+        .order('priority', { ascending: true });
+
+      if (error) {
+        console.error('❌ Error loading banners:', error);
+        loadingStates.setLoading('promos', false);
+        return;
+      }
+
+      console.log('📊 Promo banners loaded:', banners?.length || 0);
+      
+      // Find specific banners
+      const vegBanner = banners?.find((b: any) => b.name === 'vegetables_promo');
+      const rightBanner = banners?.find((b: any) => b.name === 'right_promo');
+      
+      setPromoVegImage(vegBanner?.image_url || null);
+      setPromoRightImage(rightBanner?.image_url || null);
+      
+      loadingStates.setLoading('promos', false);
+    } catch (error) {
+      console.error('❌ Error loading promo images:', error);
+      loadingStates.setLoading('promos', false);
+    }
+  };
+
+  // Load feature cards
+  const loadFeatureCards = async () => {
+    try {
+      loadingStates.setLoading('features', true);
+      console.log('🔄 Loading feature cards...');
+      
+      // Get feature cards from banners table
+      const { data: features, error } = await supabase
+        .from('banners')
+        .select('title, label, image_url, category, active')
+        .eq('active', true)
+        .eq('type', 'feature')
+        .order('priority', { ascending: true })
+        .limit(3);
+
+      if (error) {
+        console.error('❌ Error loading feature cards:', error);
+        loadingStates.setLoading('features', false);
+        return;
+      }
+
+      console.log('📊 Feature cards loaded:', features?.length || 0);
+      
+      setFeatureCards(features || []);
+      loadingStates.setLoading('features', false);
+    } catch (error) {
+      console.error('❌ Error loading feature cards:', error);
+      loadingStates.setLoading('features', false);
+    }
+  };
+
+  // Load all data in parallel for better performance
+  useEffect(() => {
+    console.log('🔄 Loading all home data in parallel...');
+    
+    // Load all data concurrently
+    Promise.allSettled([
+      loadCategories(),
+      loadPromoImages(),
+      loadFeatureCards()
+    ]).then(results => {
+      console.log('✅ All home data loading completed');
+      results.forEach((result, index) => {
+        const names = ['categories', 'promo images', 'feature cards'];
+        if (result.status === 'rejected') {
+          console.error(`❌ Error loading ${names[index]}:`, result.reason);
+        }
+      });
+      
+      // Set overall loading to false when critical data is loaded
+      setLoading(false);
+    });
+  }, []);
+  // Add an effect to log when productCategories changes
+  useEffect(() => {
+    console.log('Product categories updated:', productCategories);
+    console.log('Product categories count:', productCategories.length);
+  }, [productCategories]);
+
+  // Load products and categories from database when auth is ready
+  useEffect(() => {
+    if (authLoading) {
+      console.log('Auth still loading, waiting...');
+      return;
+    }
+    console.log('Auth ready, initializing data...');
+    const initializeData = async () => {
+      try {
+        await loadProducts();
+        await loadCategories();
+        await loadPromoImages();
+        await loadFeatureCards();
+      } catch (error: any) {
+        console.error('❌ Error initializing data:', error);
+        toast.error('Failed to load page data: ' + (error.message || 'Unknown error'));
+        // Ensure loading states are reset even if there's an error
+        setLoading(false);
+        loadingStates.setLoading('featured', false);
+        loadingStates.setLoading('bestsellers', false);
+        loadingStates.setLoading('popular', false);
+        loadingStates.setLoading('deals', false);
+        loadingStates.setLoading('categories', false);
+        loadingStates.setLoading('promos', false);
+        loadingStates.setLoading('features', false);
+      }
+    };
+    initializeData();
+  }, [authLoading]); // Re-run when authLoading changes
+
+  // Realtime updates for products to reflect admin CRUD immediately
+  useRealtime({
+    table: 'products',
+    events: ['INSERT', 'UPDATE', 'DELETE'],
+    onEvent: () => {
+      loadProducts();
+      loadCategories();
+    },
+    channelName: 'home-products-realtime'
+  });
+
+  // Realtime updates for categories
+  useRealtime({
+    table: 'categories',
+    events: ['INSERT', 'UPDATE', 'DELETE'],
+    onEvent: () => {
+      loadCategories();
+    },
+    channelName: 'home-categories-realtime'
+  });
 
   const loadProducts = async () => {
     try {
       setLoading(true);
-      const [featured, bestsellers, popular] = await Promise.all([
-        productService.getFeaturedProducts(6),
-        productService.getBestSellers(6),
-        productService.getPopularProducts(6),
-      ]);
+      console.log('🔄 Loading products from database...');
       
-      setFeaturedProducts(featured);
-      setBestSellerProducts(bestsellers);
-      setPopularProducts(popular);
-    } catch (error) {
-      console.error('Error loading products:', error);
+      // Force refresh the Supabase session to ensure we have the correct permissions
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log('Current session:', session);
+      
+      // Start all loading states
+      loadingStates.setLoading('featured', true);
+      loadingStates.setLoading('bestsellers', true);
+      loadingStates.setLoading('popular', true);
+      loadingStates.setLoading('deals', true);
+      
+      // Load all products without active filter to ensure we get all products
+      console.log('Loading all products...');
+      const allProducts = await productService.getAllProducts();
+      console.log('All products loaded:', allProducts?.length || 0);
+      
+      // Check if we got any products
+      if (!allProducts || allProducts.length === 0) {
+        console.warn('⚠️ No products found in database');
+      }
+      
+      // Load products in parallel for better performance
+      console.log('Loading featured products...');
+      const featured = await productService.getFeaturedProducts(6).catch((e: any) => { 
+        console.error('Featured error:', e); 
+        return []; 
+      });
+      
+      console.log('Loading bestsellers...');
+      const bestsellers = await productService.getBestsellers(6).catch((e: any) => { 
+        console.error('Bestsellers error:', e); 
+        return []; 
+      });
+      
+      console.log('Loading popular products...');
+      const popular = await productService.getPopularProducts(6).catch((e: any) => { 
+        console.error('Popular error:', e); 
+        return []; 
+      });
+      
+      console.log('Loading deals...');
+      const deals = await productService.getDealsOfTheWeek(8).catch((e: any) => { 
+        console.error('Deals error:', e); 
+        return []; 
+      });
+      
+      console.log('Products loaded:', { 
+        featured: featured?.length || 0, 
+        bestsellers: bestsellers?.length || 0, 
+        popular: popular?.length || 0, 
+        deals: deals?.length || 0 
+      });
+      
+      // Fallbacks when specific lists are empty – show most recent products
+      const recent = (allProducts || []).slice(0, 6);
+      console.log('Using fallback products:', recent.length);
+      
+      setFeaturedProducts(featured && featured.length ? featured : recent);
+      setBestSellerProducts(bestsellers && bestsellers.length ? bestsellers : recent);
+      setPopularProducts(popular && popular.length ? popular : recent);
+      setDealsProducts(deals && deals.length ? deals : recent);
+      
+      // Set all loading states to false
+      console.log('Setting loading states to false');
+      loadingStates.setLoading('featured', false);
+      loadingStates.setLoading('bestsellers', false);
+      loadingStates.setLoading('popular', false);
+      loadingStates.setLoading('deals', false);
+      
+      console.log('Products state updated');
+    } catch (error: any) {
+      console.error('❌ Error loading products:', error);
       toast.error('Failed to load products');
+      
+      // Try to fetch products without any filters as a fallback
+      try {
+        console.log('Trying fallback - loading all products without filters');
+        const allProducts = await productService.getAllProducts();
+        console.log('Fallback products count:', allProducts?.length || 0);
+        const fallbackProducts = allProducts?.slice(0, 6) || [];
+        setFeaturedProducts(fallbackProducts);
+        setBestSellerProducts(fallbackProducts);
+        setPopularProducts(fallbackProducts);
+        setDealsProducts(fallbackProducts);
+        console.log('Fallback products set');
+      } catch (fallbackError: any) {
+        console.error('❌ Fallback product loading also failed:', fallbackError);
+        // Set empty arrays to ensure loading completes
+        setFeaturedProducts([]);
+        setBestSellerProducts([]);
+        setPopularProducts([]);
+        setDealsProducts([]);
+        console.log('Set empty product arrays');
+      } finally {
+        // Set all loading states to false even in fallback
+        console.log('Setting loading states to false in fallback');
+        loadingStates.setLoading('featured', false);
+        loadingStates.setLoading('bestsellers', false);
+        loadingStates.setLoading('popular', false);
+        loadingStates.setLoading('deals', false);
+      }
     } finally {
       setLoading(false);
+      console.log('✅ Home page loading complete');
+    }
+  };
+      console.log('✅ Home page loading complete');
+    }
+  };
+
+  // Load promo banner images from live products
+  const loadPromoImages = async () => {
+    try {
+      loadingStates.setLoading('promos', true);
+      // First try banners table selections
+      const { data: bannerRows } = await supabase.from('banners').select('slot,product_id');
+      const bannerSel: Record<'left' | 'right', string | null> = { left: null, right: null };
+      (bannerRows || []).forEach((b: { slot: 'left' | 'right'; product_id: string }) => {
+        bannerSel[b.slot] = b.product_id || null;
+      });
+
+      if (bannerSel.left) {
+        const { data: leftProd } = await supabase.from('products').select('image_url').eq('id', bannerSel.left).single();
+        setPromoVegImage(leftProd?.image_url || null);
+      }
+      if (bannerSel.right) {
+        const { data: rightProd } = await supabase.from('products').select('image_url').eq('id', bannerSel.right).single();
+        setPromoRightImage(rightProd?.image_url || null);
+      }
+
+      if (bannerSel.left && bannerSel.right) return;
+
+      // Fallbacks by category if a banner slot not set
+      // Left card: Vegetables (without active filter)
+      const { data: veg } = await supabase
+        .from('products')
+        .select('image_url')
+        .eq('category', 'Vegetables')
+        .not('image_url', 'is', null)
+        .neq('image_url', '')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      setPromoVegImage(veg?.image_url || null);
+
+      // Right card: use Fruits (or any latest product without active filter)
+      const { data: right } = await supabase
+        .from('products')
+        .select('image_url')
+        .eq('category', 'Fruits')
+        .not('image_url', 'is', null)
+        .neq('image_url', '')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      if (right?.image_url) {
+        setPromoRightImage(right.image_url);
+      } else {
+        // Fallback: any product image (without active filter)
+        const { data: anyProd } = await supabase
+          .from('products')
+          .select('image_url')
+          .not('image_url', 'is', null)
+          .neq('image_url', '')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+        setPromoRightImage(anyProd?.image_url || null);
+      }
+    } catch (e) {
+      console.error('Error loading promo images', e);
+    } finally {
+      loadingStates.setLoading('promos', false);
+    }
+  };
+
+  // Load Feature Cards (after hero) from DB
+  const loadFeatureCards = async () => {
+    try {
+      loadingStates.setLoading('features', true);
+      // Three cards: Vegetables, Dairy, Meat (fallback to any category with image) without active filter
+      const categories = ['Vegetables', 'Dairy', 'Meat'];
+      const results: Array<{ title: string; label: string; image_url: string; category: string }> = [];
+      for (const cat of categories) {
+        const { data } = await supabase
+          .from('products')
+          .select('name,image_url,category')
+          .eq('category', cat)
+          .not('image_url', 'is', null)
+          .neq('image_url', '')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+        if (data?.image_url) {
+          results.push({ title: cat.toUpperCase(), label: 'Fresh & Healthy', image_url: data.image_url, category: cat });
+        }
+      }
+      // Fallbacks if any missing
+      if (results.length < 3) {
+        const { data: anyProds } = await supabase
+          .from('products')
+          .select('name,image_url,category')
+          .not('image_url', 'is', null)
+          .neq('image_url', '')
+          .order('created_at', { ascending: false })
+          .limit(3 - results.length);
+        (anyProds || []).forEach((p: any) => results.push({ title: (p.category || 'Products').toUpperCase(), label: 'Fresh & Healthy', image_url: p.image_url, category: p.category || '' }));
+      }
+      setFeatureCards(results);
+    } catch (e) {
+      console.error('Error loading feature cards', e);
+    } finally {
+      loadingStates.setLoading('features', false);
     }
   };
 
@@ -96,24 +671,30 @@ const Home: React.FC = () => {
         ? categoriesScrollRef.current.scrollLeft - scrollAmount
         : categoriesScrollRef.current.scrollLeft + scrollAmount;
       
+      console.log('Scrolling categories:', { direction, currentScroll: categoriesScrollRef.current.scrollLeft, newScrollLeft });
+      
       categoriesScrollRef.current.scrollTo({
         left: newScrollLeft,
         behavior: 'smooth'
       });
+    } else {
+      console.log('Categories scroll ref not available');
     }
   };
 
   // Add to cart handler
-  const handleAddToCart = (e: React.MouseEvent, product: any) => {
+  const handleAddToCartClick = (e: React.MouseEvent, product: Product) => {
     e.stopPropagation();
     addToCart({
       id: product.id,
       name: product.name,
-      price: parseFloat(product.price.replace('$', '')),
-      originalPrice: product.oldPrice ? parseFloat(product.oldPrice.replace('$', '')) : undefined,
-      imageUrl: product.imageUrl,
+      price: product.price,
+      originalPrice: product.discount !== undefined
+        ? product.price / (1 - (product.discount || 0) / 100)
+        : undefined,
+      imageUrl: product.image_url,
       categoryName: product.category,
-      stock: 100
+      stock: product.stock
     }, 1);
   };
 
@@ -131,7 +712,7 @@ const Home: React.FC = () => {
     }
   };
 
-  // Scroll function for products
+  // Scroll function for products with proper implementation
   const scrollProducts = (direction: 'left' | 'right') => {
     if (productsScrollRef.current) {
       const scrollAmount = 400;
@@ -139,17 +720,63 @@ const Home: React.FC = () => {
         ? productsScrollRef.current.scrollLeft - scrollAmount
         : productsScrollRef.current.scrollLeft + scrollAmount;
       
+      console.log('Scrolling products:', { direction, currentScroll: productsScrollRef.current.scrollLeft, newScrollLeft });
+      
       productsScrollRef.current.scrollTo({
         left: newScrollLeft,
         behavior: 'smooth'
       });
+    } else {
+      console.log('Products scroll ref not available');
     }
   };
+
+  // Scroll function for deals carousel
+  const scrollDeals = (direction: 'left' | 'right') => {
+    if (dealsScrollRef.current) {
+      const scrollAmount = 400;
+      const newScrollLeft = direction === 'left'
+        ? dealsScrollRef.current.scrollLeft - scrollAmount
+        : dealsScrollRef.current.scrollLeft + scrollAmount;
+      dealsScrollRef.current.scrollTo({ left: newScrollLeft, behavior: 'smooth' });
+    }
+  };
+
+  // Add event listener for category updates
+  useEffect(() => {
+    const handleCategoryUpdate = () => {
+      console.log('🔄 Categories updated, refreshing homepage categories');
+      clearProductCache();
+      loadCategories();
+      loadProducts();
+    };
+
+    const handleProductUpdate = () => {
+      console.log('🔄 Products updated, refreshing homepage products');
+      clearProductCache();
+      loadProducts();
+      loadPromoImages();
+      loadFeatureCards();
+    };
+
+    window.addEventListener('categoriesUpdated', handleCategoryUpdate);
+    window.addEventListener('productsUpdated', handleProductUpdate);
+
+    return () => {
+      window.removeEventListener('categoriesUpdated', handleCategoryUpdate);
+      window.removeEventListener('productsUpdated', handleProductUpdate);
+    };
+  }, [clearProductCache, loadCategories, loadProducts, loadPromoImages, loadFeatureCards]);
 
   return (
     <ThemeProvider theme={globalTheme as unknown as DefaultTheme}>
       <HomeContainer>
-      {/* Hero Section */}
+        {/* Show full page skeleton on initial load */}
+        {loading ? (
+          <HomePageLoader />
+        ) : (
+          <>
+        {/* Hero Section */}
       <HeroSection>
         <HeroWrapper>
           {/* Left Content */}
@@ -168,16 +795,91 @@ const Home: React.FC = () => {
             </HeroHeadingWrapper>
 
             <SearchWrapper>
-              <CategoryDropdown value={selectedCategory} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedCategory(e.target.value)}>
-                <option value="">Select Category</option>
-                <option value="fresh-produce">Fresh Produce</option>
-                <option value="dairy">Dairy & Eggs</option>
-                <option value="meat">Meat & Seafood</option>
-                <option value="bakery">Bakery</option>
-              </CategoryDropdown>
-              <ShopButton to="/products">Shop Now</ShopButton>
+              <CategorySelectWrapper>
+                <CategoryTrigger 
+                  onClick={() => {
+                    console.log('Toggle category dropdown');
+                    setIsCategoryOpen(v => !v);
+                  }}
+                >
+                  <span>{selectedCategory || 'All Categories'}</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24"><path fill="currentColor" d="M7 10l5 5 5-5z"/></svg>
+                </CategoryTrigger>
+                {isCategoryOpen && (
+                  <CategoryMenu>
+                    <CategoryMenuItem 
+                      onClick={(e) => { 
+                        e.stopPropagation();
+                        console.log('Selected: All Categories');
+                        setSelectedCategory(''); 
+                        setIsCategoryOpen(false); 
+                      }}
+                    >
+                      All Categories
+                    </CategoryMenuItem>
+                    {productCategories.map((category) => (
+                      <CategoryMenuItem 
+                        key={category} 
+                        onClick={(e) => { 
+                          e.stopPropagation();
+                          console.log('Selected category:', category);
+                          setSelectedCategory(category); 
+                          setIsCategoryOpen(false); 
+                        }}
+                        style={{ 
+                          backgroundColor: selectedCategory === category ? '#f0f0f0' : 'white',
+                          fontWeight: selectedCategory === category ? 'bold' : 'normal'
+                        }}
+                      >
+                        {category}
+                      </CategoryMenuItem>
+                    ))}
+                  </CategoryMenu>
+                )}
+              </CategorySelectWrapper>
+              <button 
+                onClick={() => {
+                  console.log('Shop Now clicked, selected category:', selectedCategory);
+                  // Navigate with category filter
+                  if (selectedCategory) {
+                    navigate(`/products?category=${encodeURIComponent(selectedCategory)}`);
+                  } else {
+                    navigate('/products');
+                  }
+                }}
+                style={{
+                  padding: '0.75rem 2rem',
+                  background: '#FFD700',
+                  color: '#2D3436',
+                  border: 'none',
+                  borderRadius: '10px',
+                  fontWeight: '700',
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  whiteSpace: 'nowrap',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 4px 15px rgba(255, 215, 0, 0.3)',
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.background = '#FFC700';
+                  e.currentTarget.style.color = '#ffffff';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 6px 20px rgba(255, 215, 0, 0.4)';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.background = '#FFD700';
+                  e.currentTarget.style.color = '#2D3436';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 4px 15px rgba(255, 215, 0, 0.3)';
+                }}
+              >
+                Shop Now
+              </button>
             </SearchWrapper>
-            
+
             <SignUpLink>
               Not yet Member? <Link to="/register">Sign Up Now</Link>
             </SignUpLink>
@@ -235,48 +937,27 @@ const Home: React.FC = () => {
       <FeatureCardsSection>
         <ContentContainer>
           <FeatureCardsGrid>
-            <FeatureCard $bgColor="#E8F5EC">
-              <FeatureCardImage src="https://images.unsplash.com/photo-1540420773420-3366772f4999?w=400&auto=format&fit=crop&q=80" alt="Vegetables" />
-              <FeatureCardBadge>
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#6C9A7F" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10"/>
-                  <path d="M12 6v6l4 2"/>
-                </svg>
-              </FeatureCardBadge>
-              <FeatureCardContent>
-                <FeatureCardLabel>Fresh & Healthy</FeatureCardLabel>
-                <FeatureCardTitle>VEGETABLES</FeatureCardTitle>
-                <FeatureCardButton to="/products?category=vegetables">Shop Now →</FeatureCardButton>
-              </FeatureCardContent>
-            </FeatureCard>
-
-            <FeatureCard $bgColor="#FFF4E6">
-              <FeatureCardImage src="https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=400&auto=format&fit=crop&q=80" alt="Vegetables" />
-              <FeatureCardBadge>
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#FF9800" strokeWidth="2">
-                  <path d="M12 2v20M2 12h20"/>
-                </svg>
-              </FeatureCardBadge>
-              <FeatureCardContent>
-                <FeatureCardLabel>Organic & Natural</FeatureCardLabel>
-                <FeatureCardTitle>VEGETABLES</FeatureCardTitle>
-                <FeatureCardButton to="/products?category=vegetables">Shop Now →</FeatureCardButton>
-              </FeatureCardContent>
-            </FeatureCard>
-
-            <FeatureCard $bgColor="#F0F7FF">
-              <FeatureCardImage src="https://images.unsplash.com/photo-1550304943-4f24f54ddde9?w=400&auto=format&fit=crop&q=80" alt="Vegetables" />
-              <FeatureCardBadge>
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#4CAF50" strokeWidth="2">
-                  <path d="M20 6L9 17l-5-5"/>
-                </svg>
-              </FeatureCardBadge>
-              <FeatureCardContent>
-                <FeatureCardLabel>Farm Fresh Daily</FeatureCardLabel>
-                <FeatureCardTitle>VEGETABLES</FeatureCardTitle>
-                <FeatureCardButton to="/products?category=vegetables">Shop Now →</FeatureCardButton>
-              </FeatureCardContent>
-            </FeatureCard>
+            {(featureCards.length ? featureCards : [
+              { title: 'VEGETABLES', label: 'Fresh & Healthy', image_url: promoVegImage || 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=400&auto=format&fit=crop&q=80', category: 'Vegetables' },
+              { title: 'DAIRY', label: 'Organic & Natural', image_url: 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=400&auto=format&fit=crop&q=80', category: 'Dairy' },
+              { title: 'MEAT', label: 'Farm Fresh Daily', image_url: 'https://images.unsplash.com/photo-1550304943-4f24f54ddde9?w=400&auto=format&fit=crop&q=80', category: 'Meat' },
+            ]).map((card, idx) => (
+              <FeatureCard key={idx} $bgColor={idx === 0 ? '#E8F5EC' : idx === 1 ? '#FFF4E6' : '#F0F7FF'}>
+                <FeatureCardImage loading="lazy" src={card.image_url} alt={card.title} />
+                <FeatureCardBadge>
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke={idx === 1 ? '#FF9800' : idx === 2 ? '#4CAF50' : '#6C9A7F'} strokeWidth="2">
+                    {idx === 0 && (<><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></>)}
+                    {idx === 1 && (<path d="M12 2v20M2 12h20"/>)}
+                    {idx === 2 && (<path d="M20 6L9 17l-5-5"/>)}
+                  </svg>
+                </FeatureCardBadge>
+                <FeatureCardContent>
+                  <FeatureCardLabel>{card.label}</FeatureCardLabel>
+                  <FeatureCardTitle>{card.title}</FeatureCardTitle>
+                  <FeatureCardButton to={`/products?category=${encodeURIComponent(card.category)}`}>Shop Now →</FeatureCardButton>
+                </FeatureCardContent>
+              </FeatureCard>
+            ))}
           </FeatureCardsGrid>
         </ContentContainer>
       </FeatureCardsSection>
@@ -297,54 +978,64 @@ const Home: React.FC = () => {
           </SectionHeader>
 
           <CategoriesGrid ref={categoriesScrollRef}>
-            <CategoryBox $bgColor="#E8F5EC">
-              <CategoryIcon>🥬</CategoryIcon>
-              <CategoryLabel>Vegetables</CategoryLabel>
-            </CategoryBox>
-            <CategoryBox $bgColor="#FFEAEA">
-              <CategoryIcon>☕</CategoryIcon>
-              <CategoryLabel>Coffee & Drinks</CategoryLabel>
-            </CategoryBox>
-            <CategoryBox $bgColor="#FFF4E6">
-              <CategoryIcon>🥛</CategoryIcon>
-              <CategoryLabel>Milk & Dairy</CategoryLabel>
-            </CategoryBox>
-            <CategoryBox $bgColor="#F0F7FF">
-              <CategoryIcon>🍖</CategoryIcon>
-              <CategoryLabel>Meat & Fish</CategoryLabel>
-            </CategoryBox>
-            <CategoryBox $bgColor="#FFF0F5">
-              <CategoryIcon>🍓</CategoryIcon>
-              <CategoryLabel>Fresh Fruits</CategoryLabel>
-            </CategoryBox>
-            <CategoryBox $bgColor="#F5F0FF">
-              <CategoryIcon>🧼</CategoryIcon>
-              <CategoryLabel>Cleaning Essentials</CategoryLabel>
-            </CategoryBox>
-            <CategoryBox $bgColor="#FFE5E5">
-              <CategoryIcon>🍞</CategoryIcon>
-              <CategoryLabel>Bakery</CategoryLabel>
-            </CategoryBox>
-            <CategoryBox $bgColor="#E5F5FF">
-              <CategoryIcon>🐟</CategoryIcon>
-              <CategoryLabel>Seafood</CategoryLabel>
-            </CategoryBox>
-            <CategoryBox $bgColor="#F0FFE5">
-              <CategoryIcon>🥤</CategoryIcon>
-              <CategoryLabel>Beverages</CategoryLabel>
-            </CategoryBox>
-            <CategoryBox $bgColor="#FFF5E5">
-              <CategoryIcon>🍿</CategoryIcon>
-              <CategoryLabel>Snacks</CategoryLabel>
-            </CategoryBox>
-            <CategoryBox $bgColor="#FFE5F0">
-              <CategoryIcon>🍦</CategoryIcon>
-              <CategoryLabel>Frozen Foods</CategoryLabel>
-            </CategoryBox>
-            <CategoryBox $bgColor="#E5FFE5">
-              <CategoryIcon>🌿</CategoryIcon>
-              <CategoryLabel>Organic</CategoryLabel>
-            </CategoryBox>
+            {homeCategories.map((cat, idx) => {
+              const key = (cat.name || '').toLowerCase();
+              const emojiMap: Record<string, string> = {
+                'vegetables': '🥬', 'greens': '🥬', 'produce': '🥬',
+                'fruits': '🍓', 'fruit': '🍎',
+                'dairy': '🥛', 'milk & dairy': '🥛', 'milk': '🥛', 'cheese': '🧀', 'yogurt': '🍶',
+                'meat': '🍖', 'meat & fish': '🍖', 'poultry': '🍗', 'fish': '🐟', 'seafood': '🦐',
+                'bakery': '🍞', 'bread': '🥖', 'pastries': '🧁',
+                'beverages': '🥤', 'drinks': '🥤', 'juice': '🧃', 'coffee': '☕', 'tea': '🍵', 'water': '💧',
+                'snacks': '🍿', 'chips': '🥔', 'cookies': '🍪', 'candy': '🍬',
+                'organic': '🌿', 'fresh': '🌱',
+                'frozen': '🍦', 'ice cream': '🍨',
+                'grains': '🌾', 'rice': '🍚', 'cereals': '🥣',
+                'household': '🧼', 'cleaning': '🧽', 'personal care': '🪥',
+                'spices': '🧂', 'condiments': '🧂', 'oils': '🫒', 'canned goods': '🥫',
+              };
+              const icon = emojiMap[key] || '🛍️';
+              
+              // Always show an image for all categories, including bakery
+              // Use specific fallback images based on category type
+              let displayImage = '';
+              if (cat.image_url) {
+                displayImage = cat.image_url;
+              } else if (key.includes('bakery') || key.includes('bread') || key.includes('pastries')) {
+                displayImage = 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=400&auto=format&fit=crop&q=80'; // Bakery image
+              } else if (key.includes('vegetables') || key.includes('greens') || key.includes('produce')) {
+                displayImage = 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=400&auto=format&fit=crop&q=80'; // Vegetables image
+              } else if (key.includes('fruits') || key.includes('fruit')) {
+                displayImage = 'https://images.unsplash.com/photo-1597362925531-843dff563e2c?w=400&auto=format&fit=crop&q=80'; // Fruits image
+              } else if (key.includes('dairy')) {
+                displayImage = 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=400&auto=format&fit=crop&q=80'; // Dairy image
+              } else if (key.includes('meat')) {
+                displayImage = 'https://images.unsplash.com/photo-1550304943-4f24f54ddde9?w=400&auto=format&fit=crop&q=80'; // Meat image
+              } else {
+                displayImage = 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=400&auto=format&fit=crop&q=80'; // Default image
+              }
+              
+              return (
+                <CategoryBox
+                  key={cat.name}
+                  $bgColor={['#E8F5EC','#FFEAEA','#FFF4E6','#F0F7FF','#FFF0F5','#F5F0FF','#FFE5E5','#E5F5FF','#F0FFE5','#FFF5E5'][idx % 10]}
+                  onClick={() => navigate(`/products?category=${encodeURIComponent(cat.name)}`)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <CategoryThumb 
+                    src={displayImage} 
+                    alt={cat.name} 
+                    loading="lazy"
+                    onError={() => setBrokenCategoryImages(prev => {
+                      const next = new Set(prev);
+                      next.add(cat.name);
+                      return next;
+                    })}
+                  />
+                  <CategoryLabel>{cat.name} {cat.count ? `(${cat.count})` : ''}</CategoryLabel>
+                </CategoryBox>
+              );
+            })}
           </CategoriesGrid>
         </ContentContainer>
       </CategoriesSection>
@@ -357,6 +1048,7 @@ const Home: React.FC = () => {
               <SectionTitle>Featured Products</SectionTitle>
               <ProductTabs>
                 <ProductTab 
+
                   $active={activeTab === 'featured'} 
                   onClick={() => setActiveTab('featured')}
                 >
@@ -389,18 +1081,33 @@ const Home: React.FC = () => {
           <ProductsGrid ref={productsScrollRef}>
             {getDisplayedProducts().map((product) => (
               <ProductCard key={product.id} onClick={() => navigate(`/products/${product.id}`)}>
-                <ProductImage src={product.imageUrl} alt={product.name} />
+                <ProductImage 
+                  loading="lazy" 
+                  src={product.image_url} 
+                  alt={product.name} 
+                  onError={() => setBrokenProductImages(prev => {
+                    const next = new Set(prev);
+                    next.add(product.id);
+                    return next;
+                  })}
+                  style={brokenProductImages.has(product.id) ? { 
+                    objectFit: 'contain',
+                    backgroundColor: '#f0f0f0'
+                  } : {}}
+                />
                 <ProductInfo>
                   <ProductCategory>{product.category}</ProductCategory>
                   <ProductName>{product.name}</ProductName>
                   <ProductPrice>
-                    <CurrentPrice>{product.price}</CurrentPrice>
-                    {product.oldPrice && <OldPrice>{product.oldPrice}</OldPrice>}
+                    <CurrentPrice>{formatCurrency(product.price)}</CurrentPrice>
+                    {product.discount !== undefined && product.discount > 0 && (
+                      <OldPrice>{formatCurrency(product.price / (1 - (product.discount || 0) / 100))}</OldPrice>
+                    )}
                   </ProductPrice>
-                  <Rating>
-                    ⭐⭐⭐⭐⭐ <span>({product.rating})</span>
-                  </Rating>
-                  <AddToCartBtn onClick={(e) => handleAddToCart(e, product)}>
+                  {product.rating && product.rating > 0 && (
+                    <Rating>⭐⭐⭐⭐⭐ <span>({product.rating.toFixed(1)})</span></Rating>
+                  )}
+                  <AddToCartBtn onClick={(e) => handleAddToCartClick(e, product)}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <circle cx="9" cy="21" r="1"/>
                       <circle cx="20" cy="21" r="1"/>
@@ -423,18 +1130,18 @@ const Home: React.FC = () => {
               <PromoContent>
                 <PromoLabel>Fresh Everyday</PromoLabel>
                 <PromoTitle>Fresh Vegetable</PromoTitle>
-                <PromoButton to="/products?category=vegetables">Shop Now →</PromoButton>
+                <PromoButton to="/products?category=Vegetables">Shop Now →</PromoButton>
               </PromoContent>
-              <PromoImage src="https://images.unsplash.com/photo-1597362925123-77861d3fbac7?w=400&auto=format&fit=crop&q=80" alt="Vegetables" />
+              <PromoImage src={promoVegImage || 'https://images.unsplash.com/photo-1597362925531-843dff563e2c?w=400&auto=format&fit=crop&q=80'} alt="Vegetables" />
             </PromoBanner>
 
             <PromoBanner $bgColor="#2D3436">
               <PromoContent>
                 <PromoLabel $light>Save Up to 30%</PromoLabel>
                 <PromoTitle $light>All Tested Organic & Fresh Products</PromoTitle>
-                <PromoButton to="/products">Shop Now →</PromoButton>
+                <PromoButton to="/products?category=Fruits">Shop Now →</PromoButton>
               </PromoContent>
-              <PromoImage src="https://images.unsplash.com/photo-1610348725531-843dff563e2c?w=400&auto=format&fit=crop&q=80" alt="Organic" />
+              <PromoImage src={promoRightImage || 'https://images.unsplash.com/photo-1610348725531-930a7eaecf80?w=400&auto=format&fit=crop&q=80'} alt="Organic" />
             </PromoBanner>
           </PromoBannersGrid>
         </ContentContainer>
@@ -443,73 +1150,59 @@ const Home: React.FC = () => {
       {/* Deal of the Week */}
       <DealsSection>
         <ContentContainer>
-          <SectionHeader>
-            <SectionTitle>Deal Of The Week</SectionTitle>
-            <SectionNav>
-              <NavArrow>←</NavArrow>
-              <NavArrow>→</NavArrow>
-            </SectionNav>
-          </SectionHeader>
+              <SectionHeader>
+                <SectionTitle>Deal Of The Week</SectionTitle>
+                <SectionNav>
+                  <NavArrow onClick={() => scrollDeals('left')}>
+                    ←
+                  </NavArrow>
+                  <NavArrow onClick={() => scrollDeals('right')}>
+                    →
+                  </NavArrow>
+                </SectionNav>
+              </SectionHeader>
 
-          <DealsGrid>
-            <DealCard>
-              <DealImage src="https://images.unsplash.com/photo-1600271886742-f049cd451bba?w=300&auto=format&fit=crop&q=80" alt="Deal" />
-              <DealBadge>Sale 50%</DealBadge>
-              <DealInfo>
-                <DealName>Prepays</DealName>
-                <DealPrice>
-                  <DealCurrentPrice>$4.99</DealCurrentPrice>
-                  <DealOldPrice>$9.99</DealOldPrice>
-                </DealPrice>
-                <DealRating>⭐⭐⭐⭐⭐ <span>(4.8)</span></DealRating>
-                <DealButton>Shop Now →</DealButton>
-              </DealInfo>
-            </DealCard>
-
-            <DealCard>
-              <DealImage src="https://images.unsplash.com/photo-1628773822503-930a7eaecf80?w=300&auto=format&fit=crop&q=80" alt="Deal" />
-              <DealBadge $bgColor="#FF9800">Best Sale</DealBadge>
-              <DealInfo>
-                <DealName>Green Peas</DealName>
-                <DealPrice>
-                  <DealCurrentPrice>$2.49</DealCurrentPrice>
-                  <DealOldPrice>$4.49</DealOldPrice>
-                </DealPrice>
-                <DealRating>⭐⭐⭐⭐⭐ <span>(4.9)</span></DealRating>
-                <DealButton>Shop Now →</DealButton>
-              </DealInfo>
-            </DealCard>
-
-            <DealCard>
-              <DealImage src="https://images.unsplash.com/photo-1607305387299-a3d9611cd469?w=300&auto=format&fit=crop&q=80" alt="Deal" />
-              <DealBadge $bgColor="#6C9A7F">Hot</DealBadge>
-              <DealInfo>
-                <DealName>Tomato Sauce</DealName>
-                <DealPrice>
-                  <DealCurrentPrice>$6.99</DealCurrentPrice>
-                  <DealOldPrice>$9.99</DealOldPrice>
-                </DealPrice>
-                <DealRating>⭐⭐⭐⭐⭐ <span>(5.0)</span></DealRating>
-                <DealButton>Shop Now →</DealButton>
-              </DealInfo>
-            </DealCard>
-
-            <DealCard>
-              <DealImage src="https://images.unsplash.com/photo-1600271886742-f049cd451bba?w=300&auto=format&fit=crop&q=80" alt="Deal" />
-              <DealBadge $bgColor="#6C9A7F">Fresh</DealBadge>
-              <DealInfo>
-                <DealName>Tea Bag</DealName>
-                <DealPrice>
-                  <DealCurrentPrice>$7.99</DealCurrentPrice>
-                  <DealOldPrice>$12.99</DealOldPrice>
-                </DealPrice>
-                <DealRating>⭐⭐⭐⭐⭐ <span>(4.7)</span></DealRating>
-                <DealButton>Shop Now →</DealButton>
-              </DealInfo>
-            </DealCard>
+          <DealsGrid ref={dealsScrollRef}>
+            {(dealsProducts.length ? dealsProducts : getDisplayedProducts()).map((p) => (
+              <DealCard key={p.id} onClick={() => navigate(`/products/${p.id}`)}>
+                <DealImage 
+                  loading="lazy" 
+                  src={p.image_url} 
+                  alt={p.name} 
+                  onError={() => setBrokenDealImages(prev => {
+                    const next = new Set(prev);
+                    next.add(p.id);
+                    return next;
+                  })}
+                  style={brokenDealImages.has(p.id) ? { 
+                    objectFit: 'contain',
+                    backgroundColor: '#f0f0f0'
+                  } : {}}
+                />
+                {(p.discount ?? 0) > 0 && <DealBadge>Sale {p.discount}%</DealBadge>}
+                <DealInfo>
+                  <DealName>{p.name}</DealName>
+                  <DealPrice>
+                    <DealCurrentPrice>{formatCurrency(p.price)}</DealCurrentPrice>
+                    {(p.discount ?? 0) > 0 && (
+                      <DealOldPrice>{formatCurrency(p.price / (1 - (p.discount || 0) / 100))}</DealOldPrice>
+                    )}
+                  </DealPrice>
+                  {p.rating && p.rating > 0 && (
+                    <DealRating>⭐⭐⭐⭐⭐ <span>({p.rating.toFixed(1)})</span></DealRating>
+                  )}
+                  <DealButton onClick={(e) => { e.stopPropagation(); navigate(`/products/${p.id}`); }}>Shop Now →</DealButton>
+                </DealInfo>
+              </DealCard>
+            ))}
           </DealsGrid>
         </ContentContainer>
       </DealsSection>
+      
+      {/* AI Chatbot */}
+      <AIChatbot />
+          </>
+        )}
       </HomeContainer>
     </ThemeProvider>
   );
@@ -557,6 +1250,7 @@ const HeroSection = styled.section`
     z-index: 0;
   }
   
+  
   @media (min-width: 1024px) {
     min-height: 90vh;
     
@@ -572,9 +1266,7 @@ const HeroSection = styled.section`
       right: 15%;
     }
   }
-`;
-
-const HeroWrapper = styled.div`
+`;const HeroWrapper = styled.div`
   max-width: 1400px;
   margin: 0 auto;
   display: grid;
@@ -753,82 +1445,47 @@ const SearchWrapper = styled.div`
   align-items: center;
 `;
 
-const CategoryDropdown = styled.select`
-  flex: 1;
-  min-width: 150px;
-  padding: 0.75rem 0.8rem 0.75rem 2.5rem;
-  border: 2px solid rgba(255, 255, 255, 0.25);
-  border-radius: 10px;
-  background: rgba(45, 95, 74, 0.6);
-  backdrop-filter: blur(10px);
-  color: rgba(255, 255, 255, 0.95);
-  font-size: 0.85rem;
-  font-weight: 500;
-  
-  @media (min-width: 640px) {
-    min-width: 170px;
-    padding: 0.8rem 0.9rem 0.8rem 2.7rem;
-    font-size: 0.875rem;
-  }
-  
-  @media (min-width: 1024px) {
-    min-width: 180px;
-    padding: 0.85rem 1rem 0.85rem 2.8rem;
-    font-size: 0.9rem;
-  }
-  cursor: pointer;
-  transition: all 0.3s ease;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.7)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'%3E%3C/circle%3E%3Cpath d='m21 21-4.35-4.35'%3E%3C/path%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: 0.75rem center;
-  background-size: 18px;
-
-  &:hover {
-    background-color: rgba(45, 95, 74, 0.8);
-    border-color: rgba(255, 255, 255, 0.4);
-  }
-
-  option {
-    background: #2d5f4a;
-    color: white;
-    padding: 0.5rem;
-  }
+const CategorySelectWrapper = styled.div`
+  position: relative;
+  min-width: 300px;
 `;
 
-const ShopButton = styled(Link)`
-  padding: 0.75rem 2rem;
-  background: #FFD700;
+const CategoryTrigger = styled.button`
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 2px solid rgba(255,255,255,0.25);
+  border-radius: 10px;
+  background: rgba(45,95,74,0.6);
+  color: rgba(255,255,255,0.95);
+  display: flex; align-items: center; justify-content: space-between;
+  cursor: pointer;
+`;
+
+const CategoryMenu = styled.div`
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  background: #ffffff;
   color: #2D3436;
-  border: none;
+  border: 1px solid #E1E8ED;
   border-radius: 10px;
-  font-weight: 700;
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  text-decoration: none;
-  white-space: nowrap;
-  
-  @media (min-width: 640px) {
-    padding: 0.8rem 2.2rem;
-    font-size: 0.9rem;
-  }
-  
-  @media (min-width: 1024px) {
-    padding: 0.9rem 2.5rem;
-    font-size: 0.95rem;
-  }
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
-
-  &:hover {
-    background: #FFC700;
-    color:#ffffff;
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(255, 215, 0, 0.4);
-  }
+  box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+  z-index: 50;
 `;
+
+const CategoryMenuItem = styled.button`
+  width: 100%;
+  text-align: left;
+  padding: 0.6rem 0.9rem;
+  border: none;
+  background: white;
+  cursor: pointer;
+  &:hover { background: #F8F9FA; }
+`;
+
 
 const SignUpLink = styled.p`
   color: rgba(255, 255, 255, 0.9);
@@ -839,7 +1496,6 @@ const SignUpLink = styled.p`
     color: #FFD700;
     font-weight: 600;
     text-decoration: none;
-    
     &:hover {
       text-decoration: underline;
     }
@@ -1254,7 +1910,7 @@ const CategoriesGrid = styled.div`
 
 const CategoryBox = styled.div<{ $bgColor: string }>`
   background: ${props => props.$bgColor};
-  padding: 2rem 1rem;
+  padding: 1.5rem 1rem;
   border-radius: 12px;
   display: flex;
   flex-direction: column;
@@ -1262,8 +1918,10 @@ const CategoryBox = styled.div<{ $bgColor: string }>`
   justify-content: center;
   cursor: pointer;
   transition: transform 0.3s ease, box-shadow 0.3s ease;
-  min-width: 150px;
+  min-width: 160px;
   flex-shrink: 0;
+  height: 200px;
+  width: 160px;
 
   &:hover {
     transform: translateY(-5px);
@@ -1273,6 +1931,14 @@ const CategoryBox = styled.div<{ $bgColor: string }>`
 
 const CategoryIcon = styled.div`
   font-size: 3rem;
+`;
+
+const CategoryThumb = styled.img`
+  width: 90%;
+  height: 120px;
+  border-radius: 12px;
+  object-fit: cover;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 `;
 
 const CategoryLabel = styled.div`
@@ -1499,22 +2165,19 @@ const DealsSection = styled.section`
 `;
 
 const DealsGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  display: flex;
   gap: 2rem;
   margin-top: 2rem;
-  
-  @media (max-width: 1200px) {
-    grid-template-columns: repeat(3, 1fr);
-  }
-  
-  @media (max-width: 768px) {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  
-  @media (max-width: 480px) {
-    grid-template-columns: 1fr;
-  }
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  padding-bottom: 1rem;
+
+  /* Hide scrollbar but keep functionality */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+  &::-webkit-scrollbar { display: none; }
+
+  > div { min-width: 320px; flex-shrink: 0; }
 `;
 
 const DealImage = styled.img`

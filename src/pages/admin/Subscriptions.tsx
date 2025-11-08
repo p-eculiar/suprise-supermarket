@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import styled from 'styled-components';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
-import { FiPlus, FiEdit2, FiTrash2, FiPackage, FiUsers, FiDollarSign } from 'react-icons/fi';
+import { useRealtime } from '../../hooks/useRealtime';
+import { FiPlus, FiEdit2, FiTrash2, FiPackage, FiUsers, FiDollarSign, FiRefreshCw } from 'react-icons/fi';
 import { Link } from 'react-router-dom';
 
 interface SubscriptionPlan {
@@ -23,7 +24,7 @@ const AdminSubscriptions: React.FC = () => {
   const [selectedType, setSelectedType] = useState<'all' | 'household' | 'corporate'>('all');
 
   // Fetch subscription plans
-  const { data: plans, isLoading } = useQuery({
+  const { data: plans, isLoading, refetch } = useQuery({
     queryKey: ['admin-subscription-plans', selectedType],
     queryFn: async () => {
       let query = supabase.from('subscription_plans').select('*');
@@ -36,6 +37,23 @@ const AdminSubscriptions: React.FC = () => {
       if (error) throw error;
       return data as SubscriptionPlan[];
     },
+  });
+
+  // Realtime: refresh plans and subscription stats on changes
+  useRealtime<any>({
+    table: 'subscription_plans',
+    events: ['INSERT','UPDATE','DELETE'],
+    onEvent: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-subscription-plans'] });
+      queryClient.invalidateQueries({ queryKey: ['subscription-stats'] });
+    },
+    channelName: 'admin-subscription-plans',
+  });
+  useRealtime<any>({
+    table: 'subscriptions',
+    events: ['INSERT','UPDATE','DELETE'],
+    onEvent: () => queryClient.invalidateQueries({ queryKey: ['subscription-stats'] }),
+    channelName: 'admin-subscriptions',
   });
 
   // Fetch subscription statistics
@@ -88,10 +106,16 @@ const AdminSubscriptions: React.FC = () => {
           <Title>Subscription Management</Title>
           <Subtitle>Manage household and corporate subscription plans</Subtitle>
         </HeaderContent>
-        <AddButton to="/admin/subscriptions/new">
-          <FiPlus />
-          Create New Plan
-        </AddButton>
+        <HeaderActions>
+          <RefreshButton onClick={() => refetch()}>
+            <FiRefreshCw />
+            Refresh
+          </RefreshButton>
+          <AddButton to="/admin/subscriptions/new">
+            <FiPlus />
+            Create New Plan
+          </AddButton>
+        </HeaderActions>
       </Header>
 
       {/* Statistics Cards */}
@@ -234,6 +258,34 @@ const Title = styled.h1`
 const Subtitle = styled.p`
   color: #666;
   font-size: 0.95rem;
+`;
+
+const HeaderActions = styled.div`
+  display: flex;
+  gap: 1rem;
+`;
+
+const RefreshButton = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  background: white;
+  border: 1px solid #E1E8ED;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    border-color: #6C9A7F;
+    color: #6C9A7F;
+  }
+  
+  svg {
+    width: 18px;
+    height: 18px;
+  }
 `;
 
 const AddButton = styled(Link)`

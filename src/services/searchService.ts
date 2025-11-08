@@ -133,13 +133,7 @@ export class SearchService {
         url: '/subscriptions',
         keywords: ['subscribe', 'membership', 'plan', 'premium'],
       },
-      {
-        id: 'diaspora',
-        title: 'Diaspora Gifting',
-        description: 'Send gifts to loved ones in Nigeria',
-        url: '/diaspora-gifting',
-        keywords: ['diaspora', 'gift', 'send', 'nigeria', 'family'],
-      },
+
     ];
 
     return pages
