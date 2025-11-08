@@ -1155,6 +1155,63 @@ const Table = styled.table`
   }
 `;
 
+const OrdersTable = styled.table`
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 700px;
+  
+  @media (max-width: 768px) {
+    min-width: 600px;
+  }
+  
+  @media (max-width: 480px) {
+    min-width: 500px;
+  }
+`;
+
+const TableHead = styled.th`
+  text-align: left;
+  padding: 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #636e72;
+  white-space: nowrap;
+  border-bottom: 2px solid #eef2f7;
+  
+  &:first-child {
+    border-top-left-radius: 8px;
+  }
+  
+  &:last-child {
+    border-top-right-radius: 8px;
+  }
+  
+  @media (max-width: 480px) {
+    font-size: 0.8rem;
+    padding: 0.75rem 0.5rem;
+  }
+`;
+
+const TableBody = styled.tbody`
+  tr {
+    border-bottom: 1px solid #f0f0f0;
+    
+    &:last-child {
+      border-bottom: none;
+    }
+    
+    &:hover {
+      background: #f8f9fa;
+    }
+    
+    @media (max-width: 480px) {
+      &:hover {
+        background: #fafbfc;
+      }
+    }
+  }
+`;
+
 const TableHeader = styled.th`
   text-align: left;
   padding: 1rem;

@@ -3,7 +3,7 @@ import styled from 'styled-components';
 import { motion } from 'framer-motion';
 import { useCart } from '../contexts/CartContext';
 import { useSettings } from '../contexts/SettingsContext';
-import { FiX, FiMinus, FiPlus, FiShoppingBag, FiAlertTriangle } from 'react-icons/fi';
+import { FiX, FiMinus, FiPlus, FiShoppingBag, FiAlertTriangle, FiCreditCard, FiDollarSign, FiSmartphone } from 'react-icons/fi';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
@@ -242,9 +242,9 @@ const Cart: React.FC = () => {
                 <PaymentMethods>
                   <PaymentLabel>We Accept:</PaymentLabel>
                   <PaymentIcons>
-                    <PaymentIcon>💳</PaymentIcon>
-                    <PaymentIcon>💰</PaymentIcon>
-                    <PaymentIcon>📱</PaymentIcon>
+                    <PaymentIcon><FiCreditCard /></PaymentIcon>
+                    <PaymentIcon><FiDollarSign /></PaymentIcon>
+                    <PaymentIcon><FiSmartphone /></PaymentIcon>
                   </PaymentIcons>
                 </PaymentMethods>
               </SummaryCard>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { FiX, FiSend, FiUsers, FiUser } from 'react-icons/fi';
 import { EmailNotificationService } from '../../services/emailService';
+import { SMTPEmailService } from '../../services/smtpEmailService';
 
 interface User {
   id: string;
@@ -70,42 +71,26 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
     setProgress({ sent: 0, total: recipients.length, failed: 0 });
 
     try {
-      let sentCount = 0;
-      let failedCount = 0;
+      // Check if EmailJS SMTP service is configured
+      if (SMTPEmailService.isConfigured()) {
+        // Log the current configuration for debugging
+        console.log('EmailJS Configuration Check:', {
+          serviceId: process.env.REACT_APP_EMAILJS_SERVICE_ID,
+          templateId: process.env.REACT_APP_EMAILJS_TEMPLATE_ID,
+          userId: process.env.REACT_APP_EMAILJS_USER_ID
+        });
 
-      // Send emails with 2ms delay between each
-      for (let i = 0; i < recipients.length; i++) {
-        const user = recipients[i];
-        setStatusMessage(`Sending to ${user.email} (${i + 1}/${recipients.length})...`);
+        setStatusMessage('Sending emails via EmailJS SMTP service...');
         
         try {
-          // Validate user data
-          if (!user) {
-            console.error('Invalid user data: user is null or undefined', user);
-            failedCount++;
-            setProgress(prev => ({ ...prev, failed: failedCount }));
-            continue; // Skip this user
-          }
-          
-          // Check if user has email
-          if (!user.email) {
-            console.error('User missing email property:', user);
-            console.log('User object structure:', typeof user, user ? Object.keys(user) : 'null/undefined');
-            failedCount++;
-            setProgress(prev => ({ ...prev, failed: failedCount }));
-            continue; // Skip this user
-          }
-          
-          // Additional validation: Check if email looks valid
-          if (!user.email.includes('@')) {
-            console.error('User email appears invalid:', user.email, 'User object:', user);
-            failedCount++;
-            setProgress(prev => ({ ...prev, failed: failedCount }));
-            continue; // Skip this user
-          }
+          // Prepare recipients for EmailJS SMTP service
+          const smtpRecipients = recipients.map(user => ({
+            email: user.email,
+            name: user.full_name,
+          }));
 
-          // Create HTML content with basic formatting support
-          const htmlContent = `
+          // Create HTML template
+          const htmlTemplate = `
             <!DOCTYPE html>
             <html>
               <head>
@@ -124,7 +109,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
                     <h1>${subject}</h1>
                   </div>
                   <div class="content">
-                    <p>Hi ${user.full_name || 'Valued Customer'},</p>
+                    <p>Hi {{name}},</p>
                     <div>${content.replace(/\n/g, '<br />')}</div>
                   </div>
                   <div class="footer">
@@ -136,83 +121,43 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
             </html>
           `;
 
-          // Send the email using the existing service
-          const sent = await EmailNotificationService.sendIndividualEmail(user.email, subject, htmlContent);
-          
-          // Log more detailed information about the sending result
-          if (!sent) {
-            console.warn(`Email not sent to ${user.email}. This may be due to missing API configuration.`);
-            
-            // Check if API key is configured
-            const apiKey = process.env.REACT_APP_RESEND_API_KEY;
-            console.log('API Key Debug Info:', {
-              hasKey: !!apiKey,
-              keyLength: apiKey ? apiKey.length : 0,
-              isPlaceholder: apiKey === 're_your_actual_api_key_here',
-              startsWithRe: apiKey ? apiKey.startsWith('re_') : false
+          // Send bulk emails via EmailJS SMTP service
+          const result = await SMTPEmailService.sendBulkEmails(
+            smtpRecipients,
+            subject,
+            htmlTemplate,
+            undefined,
+            100 // 100ms delay between emails
+          );
+
+          // Log notifications in database
+          for (const recipient of recipients) {
+            await EmailNotificationService.supabase.from('email_notifications').insert({
+              user_email: recipient.email,
+              user_name: recipient.full_name,
+              notification_type: 'bulk_email',
+              subject: subject,
+              content: content,
+              status: result.errors.some((error: string) => error.includes(recipient.email)) ? 'failed' : 'sent',
+              sent_at: result.errors.some((error: string) => error.includes(recipient.email)) ? null : new Date().toISOString(),
             });
-            
-            if (!apiKey) {
-              console.warn('Resend API key is not set in environment variables');
-            } else if (apiKey === 're_your_actual_api_key_here') {
-              console.warn('Resend API key is still the placeholder value. Please replace with your actual API key.');
-            } else if (!apiKey.startsWith('re_')) {
-              console.warn('Resend API key format is invalid. It should start with "re_"');
-            } else {
-              console.warn('API key appears to be configured correctly. Check browser console for network errors.');
-            }
           }
 
-          if (sent) {
-            sentCount++;
-          } else {
-            failedCount++;
-          }
-
-          // Update progress
-          setProgress({ sent: sentCount, total: recipients.length, failed: failedCount });
-          
-          // Log notification in database
-          await EmailNotificationService.supabase.from('email_notifications').insert({
-            user_email: user.email,
-            user_name: user.full_name,
-            notification_type: 'bulk_email',
-            subject: subject,
-            content: content,
-            status: sent ? 'sent' : 'failed',
-            sent_at: sent ? new Date().toISOString() : null,
-          });
-
-          // Wait 2ms before sending next email
-          if (i < recipients.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 2));
-          }
+          setStatusMessage(`Completed via EmailJS SMTP service! Sent: ${result.sent}, Failed: ${result.failed}`);
         } catch (error) {
-          console.error(`Failed to send email to ${user.email}:`, error);
-          failedCount++;
-          setProgress(prev => ({ ...prev, failed: failedCount }));
+          console.error('Error sending via EmailJS SMTP service:', error);
+          setStatusMessage(`Error: ${(error as Error).message}`);
         }
+      } else {
+        // EmailJS not configured
+        setStatusMessage('EmailJS SMTP service not configured. Please set EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, and EMAILJS_USER_ID in your .env file.');
       }
 
-      let configurationMessage = '';
-      if (failedCount > 0 && sentCount === 0) {
-        const apiKey = process.env.REACT_APP_RESEND_API_KEY;
-        if (!apiKey || apiKey === 're_your_actual_api_key_here') {
-          configurationMessage = ' (API key not configured)';
-        } else if (!apiKey.startsWith('re_')) {
-          configurationMessage = ' (Invalid API key format)';
-        } else {
-          configurationMessage = ' (Check Resend API configuration)';
-        }
-      }
-      setStatusMessage(`Completed! Sent: ${sentCount}, Failed: ${failedCount}${configurationMessage}`);
       onEmailSent();
       
       // Close modal after a delay
       setTimeout(() => {
-        if (sentCount > 0) {
-          onClose();
-        }
+        onClose();
       }, 3000);
     } catch (error) {
       console.error('Error sending bulk emails:', error);
