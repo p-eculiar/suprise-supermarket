@@ -242,8 +242,8 @@ const UserDashboard: React.FC = () => {
   const products = productsResponse?.data;
 
   const subtotal = getCartTotal();
-  // Using a fixed 6% tax for demonstration
-  const tax = subtotal * 0.06;
+  // Tax removed as per requirement - using 0 for tax
+  const tax = 0;
   const total = subtotal + tax;
   
   // Calculate order total for invoice
@@ -542,10 +542,6 @@ const UserDashboard: React.FC = () => {
                 <SummaryRow>
                   <span>Subtotal</span>
                   <span>{formatCurrency(subtotal)}</span>
-                </SummaryRow>
-                <SummaryRow>
-                  <span>Tax (6%)</span>
-                  <span>{formatCurrency(tax)}</span>
                 </SummaryRow>
                 <SummaryRow total>
                   <span>Total</span>

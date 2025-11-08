@@ -19,6 +19,7 @@ export const TopHeader: React.FC = () => {
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const navigate = useNavigate();
+  const dropdownTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   
   // Fetch categories from database
   useEffect(() => {
@@ -62,6 +63,13 @@ export const TopHeader: React.FC = () => {
     };
 
     fetchCategories();
+    
+    // Cleanup function to clear timeout on unmount
+    return () => {
+      if (dropdownTimeoutRef.current) {
+        clearTimeout(dropdownTimeoutRef.current);
+      }
+    };
   }, []);
 
   const handleSearch = (e: React.FormEvent) => {
@@ -90,16 +98,39 @@ export const TopHeader: React.FC = () => {
           <CategoryFilter>
             <CategorySelectButton
               onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
-              onMouseEnter={() => setIsCategoryDropdownOpen(true)}
-              onMouseLeave={() => setTimeout(() => setIsCategoryDropdownOpen(false), 200)}
+              onMouseEnter={() => {
+                if (dropdownTimeoutRef.current) {
+                  clearTimeout(dropdownTimeoutRef.current);
+                }
+                setIsCategoryDropdownOpen(true);
+              }}
+              onMouseLeave={() => {
+                if (dropdownTimeoutRef.current) {
+                  clearTimeout(dropdownTimeoutRef.current);
+                }
+                dropdownTimeoutRef.current = setTimeout(() => {
+                  setIsCategoryDropdownOpen(false);
+                }, 300);
+              }}
             >
               {selectedCategory || "All Categories"}
               <DownArrow />
             </CategorySelectButton>
             {isCategoryDropdownOpen && (
               <CategoryDropdown 
-                onMouseEnter={() => setIsCategoryDropdownOpen(true)}
-                onMouseLeave={() => setIsCategoryDropdownOpen(false)}
+                onMouseEnter={() => {
+                  if (dropdownTimeoutRef.current) {
+                    clearTimeout(dropdownTimeoutRef.current);
+                  }
+                }}
+                onMouseLeave={() => {
+                  if (dropdownTimeoutRef.current) {
+                    clearTimeout(dropdownTimeoutRef.current);
+                  }
+                  dropdownTimeoutRef.current = setTimeout(() => {
+                    setIsCategoryDropdownOpen(false);
+                  }, 300);
+                }}
               >
                 <CategoryOption 
                   onClick={() => {

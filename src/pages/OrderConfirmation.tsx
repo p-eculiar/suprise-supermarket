@@ -219,10 +219,6 @@ const OrderConfirmation: React.FC = () => {
                 <span>₦{order.subtotal?.toFixed(2)}</span>
               </SummaryRow>
               <SummaryRow>
-                <span>Tax</span>
-                <span>₦{order.tax?.toFixed(2)}</span>
-              </SummaryRow>
-              <SummaryRow>
                 <span>Shipping</span>
                 <span>₦{order.delivery_fee?.toFixed(2)}</span>
               </SummaryRow>
@@ -399,10 +395,6 @@ const OrderConfirmation: React.FC = () => {
                 <span>₦{order.subtotal?.toFixed(2)}</span>
               </SummaryRow>
               <SummaryRow>
-                <span>Tax</span>
-                <span>₦{order.tax?.toFixed(2)}</span>
-              </SummaryRow>
-              <SummaryRow>
                 <span>Shipping</span>
                 <span>₦{order.delivery_fee?.toFixed(2)}</span>
               </SummaryRow>
@@ -512,10 +504,6 @@ const OrderConfirmation: React.FC = () => {
               <SummaryRow>
                 <span>Subtotal</span>
                 <span>₦{order.subtotal?.toFixed(2)}</span>
-              </SummaryRow>
-              <SummaryRow>
-                <span>Tax</span>
-                <span>₦{order.tax?.toFixed(2)}</span>
               </SummaryRow>
               <SummaryRow>
                 <span>Shipping</span>
@@ -641,10 +629,6 @@ const OrderConfirmation: React.FC = () => {
             <SummaryRow>
               <span>Subtotal</span>
               <span>₦{order.subtotal?.toFixed(2)}</span>
-            </SummaryRow>
-            <SummaryRow>
-              <span>Tax</span>
-              <span>₦{order.tax?.toFixed(2)}</span>
             </SummaryRow>
             <SummaryRow>
               <span>Shipping</span>

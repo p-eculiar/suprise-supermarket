@@ -294,19 +294,7 @@ const AdminSettings: React.FC = () => {
               <InputHint>Commission charged on each transaction</InputHint>
             </FormGroup>
 
-            <FormGroup>
-              <Label>Tax Rate (%)</Label>
-              <InputGroup>
-                <Input
-                  type="number"
-                  step="0.1"
-                  value={settings.taxRate}
-                  onChange={(e) => setSettings({ ...settings, taxRate: e.target.value })}
-                />
-                <InputSuffix>%</InputSuffix>
-              </InputGroup>
-              <InputHint>Sales tax applied to orders</InputHint>
-            </FormGroup>
+            {/* Tax Rate setting removed as per requirement */}
           </SettingSection>
 
           {/* Order Settings */}

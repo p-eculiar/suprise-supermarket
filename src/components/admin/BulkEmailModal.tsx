@@ -162,7 +162,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
               console.warn('API key appears to be configured correctly. Check browser console for network errors.');
             }
           }
-          
+
           if (sent) {
             sentCount++;
           } else {

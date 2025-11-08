@@ -7,7 +7,7 @@ import toast from '../components/common/Toast';
 import { FiMail, FiLock, FiAlertCircle, FiShoppingBag } from 'react-icons/fi';
 
 const LoginPage: React.FC = () => {
-  const { login } = useAuth();
+  const { login, isAuthenticated } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -24,6 +24,12 @@ const LoginPage: React.FC = () => {
     try {
       setError(null);
       setIsLoading(true);
+      
+      // Check for internet connectivity before attempting login
+      if (!navigator.onLine) {
+        throw new Error('No internet connection. Please check your connection and try again.');
+      }
+      
       await login(formData.email, formData.password);
       
       // Check if we need to redirect to cart and add a product
@@ -36,7 +42,13 @@ const LoginPage: React.FC = () => {
         navigate(from, { replace: true });
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to log in. Please try again.');
+      // Check if it's a network error
+      if (!navigator.onLine) {
+        setError('No internet connection. Please check your connection and try again.');
+        toast.error('No internet connection. Please check your connection and try again.');
+      } else {
+        setError(err.message || 'Failed to log in. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -60,6 +72,25 @@ const LoginPage: React.FC = () => {
       toast.error(err.message || 'Failed to resend verification email');
     }
   };
+
+  // Add network status monitoring
+  React.useEffect(() => {
+    const handleOnline = () => {
+      toast.success('Internet connection restored. You can now try logging in.');
+    };
+    
+    const handleOffline = () => {
+      toast.error('Internet connection lost.');
+    };
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   return (
     <PageContainer>

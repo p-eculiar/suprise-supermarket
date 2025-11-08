@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import styled, { ThemeProvider, DefaultTheme } from 'styled-components';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
@@ -15,8 +15,7 @@ import { supabase } from '../lib/supabase';
 import { useMultipleLoadingStates } from '../hooks/useLoadingState';
 import { HomePageLoader, ProductCardLoader } from '../components/common/GranularLoading';
 import { useSettings } from '../contexts/SettingsContext';
-import { debounce, throttle } from '../utils/performance';
-import { performanceMonitor } from '../utils/performanceMonitor';
+
 
 // Styled Components
 const ProductCard = styled.div`
@@ -43,7 +42,7 @@ const containerVariants = {
   visible: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.1 // Reduced from 0.2 for faster animations
+      staggerChildren: 0.2
     }
   }
 };
@@ -54,7 +53,7 @@ const itemVariants = {
     y: 0,
     opacity: 1,
     transition: {
-      duration: 0.3 // Reduced from 0.5 for faster animations
+      duration: 0.5
     }
   }
 };
@@ -125,85 +124,7 @@ const Home: React.FC = () => {
     clearProductCache();
   }, [isAuthenticated, user, clearProductCache]);
 
-  // Memoized product data to prevent unnecessary re-renders
-  const memoizedProducts = useMemo(() => ({
-    featured: featuredProducts,
-    bestsellers: bestSellerProducts,
-    popular: popularProducts,
-    deals: dealsProducts
-  }), [featuredProducts, bestSellerProducts, popularProducts, dealsProducts]);
 
-  // Optimized product loading with performance monitoring
-  const loadAllProducts = useCallback(async () => {
-    const stopTiming = performanceMonitor.startTiming('loadAllProducts');
-    
-    try {
-      console.log('🔄 Loading products from database...');
-      
-      // Load all product types in parallel for better performance
-      const [
-        featuredData,
-        bestsellersData,
-        popularData,
-        dealsData
-      ] = await Promise.all([
-        productService.getFeaturedProducts(6),
-        productService.getBestsellers(6),
-        productService.getPopularProducts(6),
-        productService.getDealsOfTheWeek(3)
-      ]);
-      
-      console.log('✅ All products loaded:', {
-        featured: featuredData.length,
-        bestsellers: bestsellersData.length,
-        popular: popularData.length,
-        deals: dealsData.length
-      });
-      
-      // Update state in batch to minimize re-renders
-      setFeaturedProducts(featuredData);
-      setBestSellerProducts(bestsellersData);
-      setPopularProducts(popularData);
-      setDealsProducts(dealsData);
-      
-      // Update loading states
-      loadingStates.setLoading('featured', false);
-      loadingStates.setLoading('bestsellers', false);
-      loadingStates.setLoading('popular', false);
-      loadingStates.setLoading('deals', false);
-      
-    } catch (error) {
-      console.error('❌ Error loading products:', error);
-      // Set empty arrays on error to prevent app crash
-      setFeaturedProducts([]);
-      setBestSellerProducts([]);
-      setPopularProducts([]);
-      setDealsProducts([]);
-      
-      // Update loading states
-      loadingStates.setLoading('featured', false);
-      loadingStates.setLoading('bestsellers', false);
-      loadingStates.setLoading('popular', false);
-      loadingStates.setLoading('deals', false);
-    } finally {
-      stopTiming();
-    }
-  }, [loadingStates]);
-
-  // Debounced product loading to prevent excessive calls
-  const debouncedLoadAllProducts = useMemo(
-    () => debounce(loadAllProducts, 300),
-    [loadAllProducts]
-  );
-
-  // Load products when component mounts
-  useEffect(() => {
-    debouncedLoadAllProducts();
-  }, [debouncedLoadAllProducts]);
-
-  useEffect(() => {
-    debouncedLoadAllProducts();
-  }, [debouncedLoadAllProducts]);
 
   // Load categories with images from products
   const loadCategories = async () => {
@@ -261,9 +182,9 @@ const Home: React.FC = () => {
         processedCategories = categoriesWithMeta.map(c => c.name);
       } else {
         console.log('📋 No categories table or error, using product service to get categories');
-        // Get unique categories from all products
-        const uniqueCategories = Array.from(new Set(allProducts?.map((p: any) => p.category).filter(Boolean))) as string[];
-        processedCategories = uniqueCategories;
+        const categories = await productService.getCategories();
+        console.log('📊 Raw categories from database (fallback):', categories);
+        processedCategories = (categories || []).filter(Boolean);
         
         // Build counts and get first image for each category
         const counts = new Map<string, number>();
@@ -277,115 +198,39 @@ const Home: React.FC = () => {
           }
         });
         
-        categoriesWithMeta = processedCategories.map(name => ({
-          name,
+        // Filter out categories that don't have any products
+        processedCategories = processedCategories.filter(cat => 
+          counts.get(cat) && counts.get(cat)! > 0
+        );
+        
+        categoriesWithMeta = processedCategories.map(name => ({ 
+          name, 
           count: counts.get(name) || 0,
-          image_url: images.get(name)
+          image_url: images.get(name) // First product image for this category
         }));
       }
       
-      console.log('📊 Categories updated:', categoriesWithMeta);
-      console.log('📊 Categories count:', categoriesWithMeta.length);
-      
+      // If still no categories, use fallback
+      if (processedCategories.length === 0) {
+        console.log('⚠️ No categories found, using fallback categories');
+        const fallback = ['Vegetables', 'Fruits', 'Dairy', 'Meat', 'Bakery', 'Beverages', 'Snacks'];
+        processedCategories = fallback;
+        categoriesWithMeta = fallback.map(n => ({ name: n, count: allProducts?.filter((p: any) => p.category === n).length || 0 }));
+      }
+
+      console.log('✅ Final categories loaded:', processedCategories.length, processedCategories);
       setProductCategories(processedCategories);
       setHomeCategories(categoriesWithMeta);
-      loadingStates.setLoading('categories', false);
     } catch (error) {
       console.error('❌ Error loading categories:', error);
-      setProductCategories([]);
-      setHomeCategories([]);
+      const fallbackCategories = ['Vegetables', 'Fruits', 'Dairy', 'Meat', 'Bakery', 'Beverages', 'Snacks'];
+      setProductCategories(fallbackCategories);
+      setHomeCategories(fallbackCategories.map(n => ({ name: n, count: 0 })));
+    } finally {
       loadingStates.setLoading('categories', false);
     }
   };
 
-  // Load promo images
-  const loadPromoImages = async () => {
-    try {
-      loadingStates.setLoading('promos', true);
-      console.log('🔄 Loading promo images...');
-      
-      // Get promo images from banners table
-      const { data: banners, error } = await supabase
-        .from('banners')
-        .select('name, image_url, active')
-        .eq('active', true)
-        .order('priority', { ascending: true });
-
-      if (error) {
-        console.error('❌ Error loading banners:', error);
-        loadingStates.setLoading('promos', false);
-        return;
-      }
-
-      console.log('📊 Promo banners loaded:', banners?.length || 0);
-      
-      // Find specific banners
-      const vegBanner = banners?.find((b: any) => b.name === 'vegetables_promo');
-      const rightBanner = banners?.find((b: any) => b.name === 'right_promo');
-      
-      setPromoVegImage(vegBanner?.image_url || null);
-      setPromoRightImage(rightBanner?.image_url || null);
-      
-      loadingStates.setLoading('promos', false);
-    } catch (error) {
-      console.error('❌ Error loading promo images:', error);
-      loadingStates.setLoading('promos', false);
-    }
-  };
-
-  // Load feature cards
-  const loadFeatureCards = async () => {
-    try {
-      loadingStates.setLoading('features', true);
-      console.log('🔄 Loading feature cards...');
-      
-      // Get feature cards from banners table
-      const { data: features, error } = await supabase
-        .from('banners')
-        .select('title, label, image_url, category, active')
-        .eq('active', true)
-        .eq('type', 'feature')
-        .order('priority', { ascending: true })
-        .limit(3);
-
-      if (error) {
-        console.error('❌ Error loading feature cards:', error);
-        loadingStates.setLoading('features', false);
-        return;
-      }
-
-      console.log('📊 Feature cards loaded:', features?.length || 0);
-      
-      setFeatureCards(features || []);
-      loadingStates.setLoading('features', false);
-    } catch (error) {
-      console.error('❌ Error loading feature cards:', error);
-      loadingStates.setLoading('features', false);
-    }
-  };
-
-  // Load all data in parallel for better performance
-  useEffect(() => {
-    console.log('🔄 Loading all home data in parallel...');
-    
-    // Load all data concurrently
-    Promise.allSettled([
-      loadCategories(),
-      loadPromoImages(),
-      loadFeatureCards()
-    ]).then(results => {
-      console.log('✅ All home data loading completed');
-      results.forEach((result, index) => {
-        const names = ['categories', 'promo images', 'feature cards'];
-        if (result.status === 'rejected') {
-          console.error(`❌ Error loading ${names[index]}:`, result.reason);
-        }
-      });
-      
-      // Set overall loading to false when critical data is loaded
-      setLoading(false);
-    });
-  }, []);
   // Add an effect to log when productCategories changes
   useEffect(() => {
     console.log('Product categories updated:', productCategories);
@@ -470,25 +315,25 @@ const Home: React.FC = () => {
       
       // Load products in parallel for better performance
       console.log('Loading featured products...');
-      const featured = await productService.getFeaturedProducts(6).catch((e: any) => { 
+      const featured = await productService.getFeaturedProducts(6).catch(e => { 
         console.error('Featured error:', e); 
         return []; 
       });
       
       console.log('Loading bestsellers...');
-      const bestsellers = await productService.getBestsellers(6).catch((e: any) => { 
+      const bestsellers = await productService.getBestSellers(6).catch(e => { 
         console.error('Bestsellers error:', e); 
         return []; 
       });
       
       console.log('Loading popular products...');
-      const popular = await productService.getPopularProducts(6).catch((e: any) => { 
+      const popular = await productService.getPopularProducts(6).catch(e => { 
         console.error('Popular error:', e); 
         return []; 
       });
       
       console.log('Loading deals...');
-      const deals = await productService.getDealsOfTheWeek(8).catch((e: any) => { 
+      const deals = await productService.getDealsOfWeek(8).catch(e => { 
         console.error('Deals error:', e); 
         return []; 
       });
@@ -517,7 +362,7 @@ const Home: React.FC = () => {
       loadingStates.setLoading('deals', false);
       
       console.log('Products state updated');
-    } catch (error: any) {
+    } catch (error) {
       console.error('❌ Error loading products:', error);
       toast.error('Failed to load products');
       
@@ -532,7 +377,7 @@ const Home: React.FC = () => {
         setPopularProducts(fallbackProducts);
         setDealsProducts(fallbackProducts);
         console.log('Fallback products set');
-      } catch (fallbackError: any) {
+      } catch (fallbackError) {
         console.error('❌ Fallback product loading also failed:', fallbackError);
         // Set empty arrays to ensure loading completes
         setFeaturedProducts([]);
@@ -550,9 +395,6 @@ const Home: React.FC = () => {
       }
     } finally {
       setLoading(false);
-      console.log('✅ Home page loading complete');
-    }
-  };
       console.log('✅ Home page loading complete');
     }
   };

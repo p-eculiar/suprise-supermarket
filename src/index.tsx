@@ -22,18 +22,16 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// Create a client for React Query with optimized settings for 6x performance improvement
+// Create a client for React Query with optimized settings for performance
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      refetchOnWindowFocus: false, // Don't refetch when window regains focus
-      retry: 1, // Reduce retry attempts to prevent delays
-      staleTime: 10 * 60 * 1000, // 10 minutes - cache data longer to reduce network requests
-      gcTime: 20 * 60 * 1000, // 20 minutes - keep unused data in cache longer
+      refetchOnWindowFocus: false,
+      retry: 1,
+      staleTime: 10 * 60 * 1000, // 10 minutes - cache data longer
+      gcTime: 15 * 60 * 1000, // 15 minutes - keep unused data in cache
       refetchOnMount: false, // Don't refetch when component mounts if data is fresh
       refetchOnReconnect: false, // Don't refetch on reconnect if data is fresh
-      networkMode: 'always', // Always use network when available
-      structuralSharing: true, // Enable structural sharing to reduce re-renders
     },
   },
 });

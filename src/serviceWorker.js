@@ -8,7 +8,7 @@ const urlsToCache = [
 ];
 
 // Install event - cache static assets
-self.addEventListener('install', function(event: any) {
+self.addEventListener('install', function(event) {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(function(cache) {
@@ -19,7 +19,7 @@ self.addEventListener('install', function(event: any) {
 });
 
 // Fetch event - serve from cache first, then network
-self.addEventListener('fetch', function(event: any) {
+self.addEventListener('fetch', function(event) {
   // Skip requests to external domains
   if (!event.request.url.startsWith(self.location.origin)) {
     return;
@@ -57,7 +57,7 @@ self.addEventListener('fetch', function(event: any) {
 });
 
 // Activate event - clean up old caches
-self.addEventListener('activate', function(event: any) {
+self.addEventListener('activate', function(event) {
   const cacheWhitelist = [CACHE_NAME];
   
   event.waitUntil(
@@ -72,6 +72,3 @@ self.addEventListener('activate', function(event: any) {
     })
   );
 });
-
-// Make this a module
-export {};

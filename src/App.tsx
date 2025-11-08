@@ -9,7 +9,7 @@ import { Layout } from './components/layout/Layout';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { ToastProvider } from './components/common/Toast';
 import { clearAllCaches } from './utils/navigationHelpers';
-import { optimizeImages, lazyLoadImages, debounce, initPerformanceOptimizations } from './utils/performance';
+import { optimizeImages, lazyLoadImages, debounce } from './utils/performance';
 
 // Loading component styled container
 const LoadingContainer = styled.div`
@@ -129,9 +129,6 @@ const AppContent: React.FC = () => {
 
   // Performance optimization effects
   useEffect(() => {
-    // Initialize performance optimizations
-    initPerformanceOptimizations();
-    
     // Optimize images after initial render
     const timer = setTimeout(() => {
       optimizeImages();
@@ -196,7 +193,7 @@ const AppContent: React.FC = () => {
 
   return (
     <Routes>
-      <Route path="/" element={<Layout />}>
+      <Route path="/" element={<Layout />}>  
         <Route index element={routeComponents.home} />
         <Route path="products" element={routeComponents.products} />
         <Route path="products/:id" element={routeComponents.productDetail} />
@@ -222,64 +219,64 @@ const AppContent: React.FC = () => {
         <Route path="checkout" element={routeComponents.checkout} />
         
         {/* Diaspora gifting routes removed as per user request */}
-
-        {/* User Dashboard Routes */}
-        <Route
-          path="dashboard"
-          element={
-            <ProtectedRoute>
-              <React.Suspense fallback={<Loading />}>
-                <DashboardLayout />
-              </React.Suspense>
-            </ProtectedRoute>
-          }
-        >
-          <Route index element={
-            <React.Suspense fallback={<Loading />}>
-              <UserDashboard />
-            </React.Suspense>
-          } />
-          <Route path="orders" element={
-            <React.Suspense fallback={<Loading />}>
-              <Orders />
-            </React.Suspense>
-          } />
-          <Route path="tracking" element={
-            <React.Suspense fallback={<Loading />}>
-              <DeliveryTracking />
-            </React.Suspense>
-          } />
-          <Route path="feedback" element={
-            <React.Suspense fallback={<Loading />}>
-              <Feedback />
-            </React.Suspense>
-          } />
-          <Route path="messages" element={
-            <React.Suspense fallback={<Loading />}>
-              <Messages />
-            </React.Suspense>
-          } />
-          <Route path="history" element={
-            <React.Suspense fallback={<Loading />}>
-              <History />
-            </React.Suspense>
-          } />
-          <Route path="payment" element={
-            <React.Suspense fallback={<Loading />}>
-              <Payment />
-            </React.Suspense>
-          } />
-          <Route path="customization" element={
-            <React.Suspense fallback={<Loading />}>
-              <Customization />
-            </React.Suspense>
-          } />
-        </Route>
-
+        
         {/* 404 - Keep this as the last route */}
         <Route path="*" element={
           <React.Suspense fallback={<Loading />}>
             <NotFound />
+          </React.Suspense>
+        } />
+      </Route>
+      
+      {/* User Dashboard Routes - Moved to top level to avoid main layout */}
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute>
+            <React.Suspense fallback={<Loading />}>
+              <DashboardLayout />
+            </React.Suspense>
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={
+          <React.Suspense fallback={<Loading />}>
+            <UserDashboard />
+          </React.Suspense>
+        } />
+        <Route path="orders" element={
+          <React.Suspense fallback={<Loading />}>
+            <Orders />
+          </React.Suspense>
+        } />
+        <Route path="tracking" element={
+          <React.Suspense fallback={<Loading />}>
+            <DeliveryTracking />
+          </React.Suspense>
+        } />
+        <Route path="feedback" element={
+          <React.Suspense fallback={<Loading />}>
+            <Feedback />
+          </React.Suspense>
+        } />
+        <Route path="messages" element={
+          <React.Suspense fallback={<Loading />}>
+            <Messages />
+          </React.Suspense>
+        } />
+        <Route path="history" element={
+          <React.Suspense fallback={<Loading />}>
+            <History />
+          </React.Suspense>
+        } />
+        <Route path="payment" element={
+          <React.Suspense fallback={<Loading />}>
+            <Payment />
+          </React.Suspense>
+        } />
+        <Route path="customization" element={
+          <React.Suspense fallback={<Loading />}>
+            <Customization />
           </React.Suspense>
         } />
       </Route>

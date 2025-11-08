@@ -19,7 +19,8 @@ const Checkout: React.FC = () => {
   const { user } = useAuth();
   const { settings, formatCurrency } = useSettings();
   const subtotal = getCartTotal();
-  const tax = subtotal * (settings.taxRate / 100); // Use settings tax rate instead of hardcoded 0.075
+  // Tax removed as per requirement - using 0 for tax
+  const tax = 0; // Use settings tax rate instead of hardcoded 0.075
   
   const [step, setStep] = useState(1); // 1: Shipping, 2: Payment, 3: Review
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'paypal' | 'bank'>('card');
@@ -799,10 +800,6 @@ const Checkout: React.FC = () => {
                   <span>{formatCurrency(subtotal)}</span>
                 </SummaryRow>
                 <SummaryRow>
-                  <span>Tax (7.5%):</span>
-                  <span>{formatCurrency(tax)}</span>
-                </SummaryRow>
-                <SummaryRow>
                   <span>Shipping:</span>
                   <span>
                     {shipping === 0 ? 'Free' : formatCurrency(shipping)}
@@ -872,10 +869,6 @@ const Checkout: React.FC = () => {
             <SummaryRow>
               <span>Subtotal</span>
               <span>{formatCurrency(subtotal)}</span>
-            </SummaryRow>
-            <SummaryRow>
-              <span>Tax (7.5%)</span>
-              <span>{formatCurrency(tax)}</span>
             </SummaryRow>
             <SummaryRow>
               <span>Shipping</span>

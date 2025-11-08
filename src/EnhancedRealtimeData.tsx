@@ -428,7 +428,6 @@ const EnhancedRealtimeData: React.FC = () => {
                 </TableCell>
               </TableRow>
             ))}
-
           </TableBody>
         </DataTable>
       )}

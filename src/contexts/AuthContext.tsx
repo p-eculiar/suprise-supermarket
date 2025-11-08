@@ -339,6 +339,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       localStorage.removeItem(`user_role_${user.id}`);
     }
     await supabase.auth.signOut();
+    setUser(null);
+    setSession(null);
     toast.logoutSuccess();
   }, [user]);
 

@@ -13,11 +13,56 @@ const AdminProducts: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('all');
   const [showInventoryAlerts, setShowInventoryAlerts] = useState(false);
+  const [categories, setCategories] = useState<{name: string}[]>([]);
   const queryClient = useQueryClient();
   const { formatCurrency } = useSettings();
 
   // Debounce search term to avoid excessive queries
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
+
+  // Fetch categories from database
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        // First try to get categories from the categories table
+        const { data: catRows, error: catErr } = await supabase
+          .from('categories')
+          .select('name')
+          .order('name', { ascending: true });
+
+        if (!catErr && catRows && catRows.length > 0) {
+          setCategories(catRows);
+          return;
+        }
+
+        // Fallback: get categories from products
+        const { data: prodRows, error: prodErr } = await supabase
+          .from('products')
+          .select('category')
+          .eq('active', true);
+
+        if (!prodErr && prodRows) {
+          const uniqueCategories = Array.from(new Set(prodRows.map((p: any) => p.category)))
+            .filter(Boolean)
+            .map((name: string) => ({ name }));
+          setCategories(uniqueCategories);
+        }
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+        // Fallback to default categories
+        setCategories([
+          { name: 'Vegetables' },
+          { name: 'Fruits' },
+          { name: 'Dairy' },
+          { name: 'Meat' },
+          { name: 'Bakery' },
+          { name: 'Beverages' }
+        ]);
+      }
+    };
+
+    fetchCategories();
+  }, []);
 
   // Fetch products from Supabase with better error handling
   const { data: products = [], isLoading, isError, error } = useQuery({
@@ -295,17 +340,9 @@ const AdminProducts: React.FC = () => {
         </SearchBox>
 
         <FilterGroup>
-          <FilterButton>
-            <FiFilter />
-            Filter
-          </FilterButton>
           <CategorySelect value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
             <option value="all">All Categories</option>
-            <option value="vegetables">Vegetables</option>
-            <option value="fruits">Fruits</option>
-            <option value="dairy">Dairy</option>
-            <option value="meat">Meat & Fish</option>
-            <option value="bakery">Bakery</option>
+            {categories.map(({name}) => <option key={name} value={name}>{name}</option>)}
           </CategorySelect>
         </FilterGroup>
       </FilterBar>
@@ -505,6 +542,22 @@ const AdminProducts: React.FC = () => {
     </Container>
   );
 };
+
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
 
 export default AdminProducts;
 
@@ -1234,19 +1287,3 @@ const Chip = styled.button<{ $active?: boolean }>`
   cursor: pointer;
 `;
 
-// Add debounce hook
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
-
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [value, delay]);
-
-  return debouncedValue;
-}

@@ -70,7 +70,8 @@ const Cart: React.FC = () => {
   // Shipping will be calculated in the checkout process based on location
   // For now, we'll show 0 and explain that it will be calculated during checkout
   const shipping = 0;
-  const tax = subtotal * (settings.taxRate / 100);
+  // Tax removed as per requirement - using 0 for tax
+  const tax = 0;
   const total = subtotal + shipping + tax;
 
   const handleCheckout = () => {
@@ -225,11 +226,6 @@ const Cart: React.FC = () => {
                       Enter delivery address in checkout to calculate
                     </div>
                   </SummaryValue>
-                </SummaryRow>
-
-                <SummaryRow>
-                  <SummaryLabel>Tax (8%):</SummaryLabel>
-                  <SummaryValue>{formatCurrency(tax)}</SummaryValue>
                 </SummaryRow>
 
                 <Divider />
