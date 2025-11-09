@@ -56,7 +56,7 @@
     "lint": "eslint src --ext .ts,.tsx",
     "lint:fix": "eslint src --ext .ts,.tsx --fix",
     "type-check": "tsc --noEmit",
-    "serve": "node server.js",
+    "serve": "node simple-server.js",
     "prepare": "husky install"
   },
   "eslintConfig": {
