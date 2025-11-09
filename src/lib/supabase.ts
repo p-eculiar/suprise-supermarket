@@ -6,7 +6,15 @@ const viteEnv = (typeof import.meta !== 'undefined' ? (import.meta as any).env :
 const supabaseUrl = viteEnv.VITE_SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL || '';
 const supabaseAnonKey = viteEnv.VITE_SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY || '';
 
+// Add debugging logs
+console.log('[Supabase Config] supabaseUrl:', supabaseUrl);
+console.log('[Supabase Config] supabaseAnonKey:', supabaseAnonKey);
+console.log('[Supabase Config] Both values present:', !!supabaseUrl && !!supabaseAnonKey);
+
 if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('[Supabase Config] ERROR: Missing environment variables!');
+  console.error('[Supabase Config] supabaseUrl:', supabaseUrl);
+  console.error('[Supabase Config] supabaseAnonKey:', supabaseAnonKey);
   throw new Error('Supabase env vars missing. Set REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY');
 }
 
