@@ -31,8 +31,29 @@ export const TopHeader: React.FC = () => {
           .select('name')
           .order('name', { ascending: true });
 
+        // Also get product counts for each category
+        const { data: productCounts, error: countErr } = await supabase
+          .from('products')
+          .select('category')
+          .eq('active', true);
+
         if (!catErr && catRows && catRows.length > 0) {
-          setCategories(catRows.map((cat: any) => ({ name: cat.name })));
+          // Create a map of product counts by category
+          const countMap: Record<string, number> = {};
+          if (!countErr && productCounts) {
+            productCounts.forEach((p: any) => {
+              if (p.category) {
+                countMap[p.category] = (countMap[p.category] || 0) + 1;
+              }
+            });
+          }
+
+          // Filter out categories that don't have any products
+          const categoriesWithProducts = catRows.filter((cat: any) => 
+            countMap[cat.name] && countMap[cat.name] > 0
+          );
+
+          setCategories(categoriesWithProducts.map((cat: any) => ({ name: cat.name })));
           return;
         }
 

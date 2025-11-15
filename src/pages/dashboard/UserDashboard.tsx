@@ -83,14 +83,19 @@ const UserDashboard: React.FC = () => {
             });
           }
 
-          const categoriesWithDetails = catRows.map((cat: any) => ({
+          // Filter out categories that don't have any products
+          const categoriesWithProducts = catRows.filter((cat: any) => 
+            countMap[cat.name] && countMap[cat.name] > 0
+          );
+
+          const categoriesWithDetails = categoriesWithProducts.map((cat: any) => ({
             name: cat.name,
             icon: iconMap[cat.name.toLowerCase()] || '🛍️',
             image_url: cat.image_url,
             count: countMap[cat.name] || 0
           }));
           
-          console.log('✅ Categories from categories table:', categoriesWithDetails);
+          console.log('✅ Categories from categories table (with products only):', categoriesWithDetails);
           setCategories(categoriesWithDetails);
           return;
         }
@@ -143,9 +148,9 @@ const UserDashboard: React.FC = () => {
             icon: iconMap[name ? name.toLowerCase() : ''] || '🛍️',
             image_url: data.image_url,
             count: data.count
-          })).filter(cat => cat.name); // Filter out null/undefined categories
+          })).filter(cat => cat.name && cat.count > 0); // Filter out null/undefined categories and those with no products
           
-          console.log('✅ Final categories from products table:', categoriesWithDetails);
+          console.log('✅ Final categories from products table (with products only):', categoriesWithDetails);
           setCategories(categoriesWithDetails);
         }
       } catch (error) {

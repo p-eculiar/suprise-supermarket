@@ -62,7 +62,7 @@ const Products: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const { isLoading, startLoading, stopLoading } = useLoadingState({ initialLoading: true });
   const [totalCount, setTotalCount] = useState(0);
-  const [categories, setCategories] = useState<{ id: string; name: string; count: number }[]>([]);
+  const [categories, setCategories] = useState<{ id: string; name: string; count: number; image_url?: string }[]>([]);
   // Track broken product images
   const [brokenProductImages, setBrokenProductImages] = useState<Set<string>>(new Set());
 
@@ -284,12 +284,14 @@ const Products: React.FC = () => {
       finalCategories.push({
         id: `cat-uncategorized`,
         name: 'Uncategorized',
-        count: uncategorizedCount
+        count: uncategorizedCount,
+        image_url: undefined
       });
     }
     
     console.log('✅ Final categories loaded (active products only):', finalCategories);
     setCategories(finalCategories);
+
   };
 
   // Realtime: refresh categories and products on changes
