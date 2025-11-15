@@ -258,66 +258,38 @@ const Products: React.FC = () => {
     // Try to get category metadata from categories table
     const { data: catRows, error: catErr } = await supabase
       .from('categories')
-      .select('name, image_url')
+      .select('name, image_url, product_count')
       .order('name', { ascending: true });
 
     let categoriesWithMeta: Array<{ id: string; name: string; count: number; image_url?: string }> = [];
     
-    if (!catErr && catRows && catRows.length > 0) {
-      console.log('📋 Categories table found with', catRows.length, 'rows');
-      
-      // Create a map of category metadata
-      const catMeta = new Map();
-      catRows.forEach(cat => {
-        catMeta.set(cat.name, cat);
-      });
-      
-      // Build final list: only categories that have products
-      categoriesWithMeta = Array.from(counts.entries())
-        .filter(([name, count]) => name !== 'Uncategorized' && count > 0) // Exclude uncategorized unless needed
-        .map(([name, count], index) => ({
+    // Create final list: only categories that have products (from product data, not categories table)
+    const finalCategories = Array.from(counts.entries())
+      .filter(([name, count]) => name !== 'Uncategorized' && count > 0) // Exclude uncategorized unless needed
+      .map(([name, count], index) => {
+        // Find matching category metadata if it exists
+        const catMeta = catRows?.find(cat => cat.name === name);
+        return {
           id: `cat-${index}`,
           name,
           count,
-          image_url: catMeta.get(name)?.image_url
-        }))
-        .sort((a, b) => a.name.localeCompare(b.name));
-      
-      // Add uncategorized category if it has products
-      const uncategorizedCount = counts.get('Uncategorized');
-      if (uncategorizedCount !== undefined && uncategorizedCount > 0) {
-        categoriesWithMeta.push({
-          id: `cat-uncategorized`,
-          name: 'Uncategorized',
-          count: uncategorizedCount
-        });
-      }
-    } else {
-      console.log('📋 No categories table or error:', catErr);
-      
-      // Use only product categories
-      categoriesWithMeta = Array.from(counts.entries())
-        .filter(([name, count]) => name !== 'Uncategorized' && count > 0) // Exclude uncategorized unless needed
-        .map(([name, count], index) => ({
-          id: `cat-${index}`,
-          name,
-          count
-        }))
-        .sort((a, b) => a.name.localeCompare(b.name));
-      
-      // Add uncategorized category if it has products
-      const uncategorizedCount = counts.get('Uncategorized');
-      if (uncategorizedCount !== undefined && uncategorizedCount > 0) {
-        categoriesWithMeta.push({
-          id: `cat-uncategorized`,
-          name: 'Uncategorized',
-          count: uncategorizedCount
-        });
-      }
+          image_url: catMeta?.image_url
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+    
+    // Add uncategorized category if it has products
+    const uncategorizedCount = counts.get('Uncategorized');
+    if (uncategorizedCount !== undefined && uncategorizedCount > 0) {
+      finalCategories.push({
+        id: `cat-uncategorized`,
+        name: 'Uncategorized',
+        count: uncategorizedCount
+      });
     }
     
-    console.log('✅ Final categories loaded (active products only):', categoriesWithMeta);
-    setCategories(categoriesWithMeta);
+    console.log('✅ Final categories loaded (active products only):', finalCategories);
+    setCategories(finalCategories);
   };
 
   // Realtime: refresh categories and products on changes
