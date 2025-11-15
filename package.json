@@ -46,8 +46,8 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build",
-    "build:prod": "GENERATE_SOURCEMAP=false react-scripts build",
+    "build": "CI=false react-scripts build",
+    "build:prod": "CI=false GENERATE_SOURCEMAP=false react-scripts build",
     "test": "react-scripts test --passWithNoTests",
     "test:coverage": "react-scripts test --coverage --watchAll=false",
     "test:watch": "react-scripts test --watchAll=false",
