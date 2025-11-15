@@ -204,7 +204,7 @@ const TopHeaderContainer = styled.div`
 `;
 
 const TopHeaderInner = styled.div`
-  max-width: 1380px;
+  max-width: 1400px;
   margin: 0 auto;
   display: flex;
   justify-content: space-between;

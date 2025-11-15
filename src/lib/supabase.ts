@@ -11,11 +11,30 @@ console.log('[Supabase Config] supabaseUrl:', supabaseUrl);
 console.log('[Supabase Config] supabaseAnonKey:', supabaseAnonKey);
 console.log('[Supabase Config] Both values present:', !!supabaseUrl && !!supabaseAnonKey);
 
+// Check if we're in a browser environment
+if (typeof window !== 'undefined') {
+  console.log('[Supabase Config] Browser environment detected');
+  // Test if environment variables are accessible
+  console.log('[Supabase Config] REACT_APP_SUPABASE_URL from process.env:', process.env.REACT_APP_SUPABASE_URL);
+  console.log('[Supabase Config] REACT_APP_SUPABASE_ANON_KEY from process.env:', process.env.REACT_APP_SUPABASE_ANON_KEY);
+}
+
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error('[Supabase Config] ERROR: Missing environment variables!');
   console.error('[Supabase Config] supabaseUrl:', supabaseUrl);
   console.error('[Supabase Config] supabaseAnonKey:', supabaseAnonKey);
-  throw new Error('Supabase env vars missing. Set REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY');
+  
+  // In development, show a more detailed error
+  if (process.env.NODE_ENV === 'development') {
+    console.error('[Supabase Config] Make sure you have a .env file with:');
+    console.error('[Supabase Config] REACT_APP_SUPABASE_URL=your_supabase_url');
+    console.error('[Supabase Config] REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key');
+  }
+  
+  // Don't throw error in production, just log it
+  if (process.env.NODE_ENV !== 'production') {
+    throw new Error('Supabase env vars missing. Set REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY');
+  }
 }
 
 // Create Supabase client with real-time enabled

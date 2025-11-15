@@ -24,6 +24,7 @@ const AdminProducts: React.FC = () => {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
+        console.log('[AdminProducts] Fetching categories from database...');
         // First try to get categories from the categories table
         const { data: catRows, error: catErr } = await supabase
           .from('categories')
@@ -31,24 +32,35 @@ const AdminProducts: React.FC = () => {
           .order('name', { ascending: true });
 
         if (!catErr && catRows && catRows.length > 0) {
+          console.log('[AdminProducts] Found categories in categories table:', catRows.length);
           setCategories(catRows);
           return;
         }
 
+        if (catErr) {
+          console.error('[AdminProducts] Error fetching categories from categories table:', catErr);
+        }
+
         // Fallback: get categories from products
+        console.log('[AdminProducts] Falling back to product categories...');
         const { data: prodRows, error: prodErr } = await supabase
           .from('products')
           .select('category')
           .eq('active', true);
 
         if (!prodErr && prodRows) {
+          console.log('[AdminProducts] Found categories from products table:', prodRows.length);
           const uniqueCategories = Array.from(new Set(prodRows.map((p: any) => p.category)))
             .filter(Boolean)
             .map((name: string) => ({ name }));
           setCategories(uniqueCategories);
         }
+        
+        if (prodErr) {
+          console.error('[AdminProducts] Error fetching categories from products table:', prodErr);
+        }
       } catch (error) {
-        console.error('Error fetching categories:', error);
+        console.error('[AdminProducts] Error fetching categories:', error);
         // Fallback to default categories
         setCategories([
           { name: 'Vegetables' },
@@ -68,6 +80,7 @@ const AdminProducts: React.FC = () => {
   const { data: products = [], isLoading, isError, error } = useQuery({
     queryKey: ['admin-products', debouncedSearchTerm, filterCategory],
     queryFn: async () => {
+      console.log('[AdminProducts] Fetching products...');
       let query = supabase.from('products').select('*');
       
       if (debouncedSearchTerm) {
@@ -79,7 +92,11 @@ const AdminProducts: React.FC = () => {
       }
       
       const { data, error } = await query.order('created_at', { ascending: false });
-      if (error) throw error;
+      if (error) {
+        console.error('[AdminProducts] Error fetching products:', error);
+        throw error;
+      }
+      console.log('[AdminProducts] Successfully fetched products:', data?.length);
       return data;
     },
     staleTime: 30000, // Cache for 30 seconds
