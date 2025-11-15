@@ -1,7 +1,8 @@
 [build]
   command = "npm run build"
   publish = "build"
-  
+  environment = { CI = "false" }
+
 [functions]
   directory = "netlify/functions"
 
