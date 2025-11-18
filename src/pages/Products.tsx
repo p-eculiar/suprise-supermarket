@@ -232,12 +232,14 @@ const Products: React.FC = () => {
     
     console.log('📊 Raw product categories data (active only):', prodRows?.length, 'rows');
     
-    // Count products per category (including empty categories)
+    // Count products per category (only for products that have categories)
     const counts = new Map<string, number>();
     prodRows?.forEach(p => {
-      // Include products with empty/null categories in the count
-      const category = (p.category && p.category.trim()) ? p.category.trim() : 'Uncategorized';
-      counts.set(category, (counts.get(category) || 0) + 1);
+      // Only include products that have a category
+      if (p.category && p.category.trim()) {
+        const category = p.category.trim();
+        counts.set(category, (counts.get(category) || 0) + 1);
+      }
     });
     
     console.log('📊 Product categories count (active only):', Object.fromEntries(counts));
@@ -291,7 +293,6 @@ const Products: React.FC = () => {
     
     console.log('✅ Final categories loaded (active products only):', finalCategories);
     setCategories(finalCategories);
-
   };
 
   // Realtime: refresh categories and products on changes

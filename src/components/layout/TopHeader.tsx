@@ -38,26 +38,46 @@ export const TopHeader: React.FC = () => {
           .eq('active', true);
 
         if (!catErr && catRows && catRows.length > 0) {
-          // Create a map of product counts by category
+          // Create a map of product counts by category (only for products with categories)
           const countMap: Record<string, number> = {};
           if (!countErr && productCounts) {
             productCounts.forEach((p: any) => {
-              if (p.category) {
+              if (p.category) { // Only count products that have a category
                 countMap[p.category] = (countMap[p.category] || 0) + 1;
               }
             });
           }
 
           // Filter out categories that don't have any products
-          const categoriesWithProducts = catRows.filter((cat: any) => 
-            countMap[cat.name] && countMap[cat.name] > 0
-          );
+          const categoriesWithProducts = catRows.filter((cat: any) => {
+            const hasProducts = countMap[cat.name] && countMap[cat.name] > 0;
+            return hasProducts;
+          });
 
-          setCategories(categoriesWithProducts.map((cat: any) => ({ name: cat.name })));
-          return;
+          // If we have categories with products, use them
+          if (categoriesWithProducts.length > 0) {
+            setCategories(categoriesWithProducts.map((cat: any) => ({ name: cat.name })));
+            return;
+          } else if (productCounts && productCounts.length > 0) {
+            // If no categories table entries have products but we do have products,
+            // create categories from the actual product data
+            const productCategorySet = new Set<string>();
+            productCounts.forEach((p: any) => {
+              if (p.category) { // Only include products that have a category
+                productCategorySet.add(p.category);
+              }
+            });
+            
+            const productCategories = Array.from(productCategorySet)
+              .map(name => ({ name }))
+              .filter(cat => cat.name);
+              
+            setCategories(productCategories);
+            return;
+          }
         }
 
-        // Fallback: get categories from products
+        // Fallback: get categories from products (only for products with categories)
         const { data: prodRows, error: prodErr } = await supabase
           .from('products')
           .select('category')
@@ -65,7 +85,7 @@ export const TopHeader: React.FC = () => {
 
         if (!prodErr && prodRows) {
           const uniqueCategories = Array.from(new Set(prodRows.map((p: any) => p.category)))
-            .filter(Boolean)
+            .filter(Boolean) // Remove null/undefined/empty categories
             .map((name: string) => ({ name }));
           setCategories(uniqueCategories as Category[]);
         }
