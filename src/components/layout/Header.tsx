@@ -686,6 +686,47 @@ export const Header: React.FC = () => {
         >
           Services
         </MobileNavLink>
+        
+        {/* Add authentication links for mobile */}
+        {isAuthenticated && user ? (
+          <>
+            <MobileNavLink
+              to="#"
+              onClick={(e) => {
+                e.preventDefault();
+                handleDashboardClick(e);
+                setMobileMenuOpen(false);
+              }}
+            >
+              Dashboard
+            </MobileNavLink>
+            <MobileNavLink
+              to="#"
+              onClick={(e) => {
+                e.preventDefault();
+                logout();
+                setMobileMenuOpen(false);
+              }}
+            >
+              Logout
+            </MobileNavLink>
+          </>
+        ) : (
+          <>
+            <MobileNavLink
+              to="/register"
+              onClick={() => { clearCachesForFrontpage(); setMobileMenuOpen(false); }}
+            >
+              Sign Up
+            </MobileNavLink>
+            <MobileNavLink
+              to="/login"
+              onClick={() => { clearCachesForFrontpage(); setMobileMenuOpen(false); }}
+            >
+              Login
+            </MobileNavLink>
+          </>
+        )}
       </MobileMenu>
     </HeaderContainer>
   );

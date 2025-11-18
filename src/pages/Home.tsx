@@ -142,6 +142,11 @@ const Home: React.FC = () => {
         console.error('❌ Error fetching products for categories:', productsError);
       } else {
         console.log('📊 Found', allProducts?.length || 0, 'active products');
+        // Log some sample products to see what categories we have
+        if (allProducts && allProducts.length > 0) {
+          const sampleProducts = allProducts.slice(0, 5);
+          console.log('📊 Sample active products:', sampleProducts);
+        }
       }
       
       // Prefer explicit categories table (with optional image), else group products
@@ -150,6 +155,8 @@ const Home: React.FC = () => {
         .select('name, image_url')
         .order('name', { ascending: true });
 
+      console.log('📋 Categories table result:', catRows, catErr);
+      
       let processedCategories: string[] = [];
       let categoriesWithMeta: Array<{ name: string; count: number; image_url?: string }> = [];
 
@@ -167,19 +174,39 @@ const Home: React.FC = () => {
           }
         });
 
+        console.log('📊 Product counts by category:', Object.fromEntries(counts));
+        console.log('📊 Images by category:', Object.fromEntries(images));
+        
         // Filter out categories that don't have any products
-        const categoriesWithProducts = (catRows as any[]).filter((cat: any) => 
-          counts.get(cat.name) && counts.get(cat.name)! > 0
-        );
+        const categoriesWithProducts = (catRows as any[]).filter((cat: any) => {
+          const hasProducts = counts.get(cat.name) && counts.get(cat.name)! > 0;
+          console.log(`📋 Category ${cat.name}: ${counts.get(cat.name) || 0} products, showing: ${hasProducts}`);
+          return hasProducts;
+        });
         
         console.log('✅ Categories with products:', categoriesWithProducts.length);
-
-        categoriesWithMeta = categoriesWithProducts.map((r: any) => ({
-          name: r.name,
-          image_url: r.image_url || images.get(r.name), // Use category image or first product image
-          count: counts.get(r.name) || 0,
-        }));
-        processedCategories = categoriesWithMeta.map(c => c.name);
+        
+        if (categoriesWithProducts.length === 0) {
+          console.log('⚠️ No categories with products found, checking if we have any products at all...');
+          if (allProducts && allProducts.length > 0) {
+            console.log('📊 We have products, creating categories from product data instead...');
+            // Fallback to creating categories from product data
+            const productCategories = Array.from(counts.entries())
+              .filter(([name, count]) => name && count > 0)
+              .map(([name, count]) => ({ name, count, image_url: images.get(name) }));
+            
+            categoriesWithMeta = productCategories;
+            processedCategories = productCategories.map(c => c.name);
+            console.log('✅ Created categories from product data:', processedCategories);
+          }
+        } else {
+          categoriesWithMeta = categoriesWithProducts.map((r: any) => ({
+            name: r.name,
+            image_url: r.image_url || images.get(r.name), // Use category image or first product image
+            count: counts.get(r.name) || 0,
+          }));
+          processedCategories = categoriesWithMeta.map(c => c.name);
+        }
       } else {
         console.log('📋 No categories table or error, using product service to get categories');
         const categories = await productService.getCategories();

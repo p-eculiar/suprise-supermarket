@@ -83,17 +83,44 @@ const UserDashboard: React.FC = () => {
             });
           }
 
+          console.log('📊 Count map:', countMap);
+          
           // Filter out categories that don't have any products
-          const categoriesWithProducts = catRows.filter((cat: any) => 
-            countMap[cat.name] && countMap[cat.name] > 0
-          );
+          const categoriesWithProducts = catRows.filter((cat: any) => {
+            const hasProducts = countMap[cat.name] && countMap[cat.name] > 0;
+            console.log(`📋 Category ${cat.name}: ${countMap[cat.name] || 0} products, showing: ${hasProducts}`);
+            return hasProducts;
+          });
 
-          const categoriesWithDetails = categoriesWithProducts.map((cat: any) => ({
-            name: cat.name,
-            icon: iconMap[cat.name.toLowerCase()] || '🛍️',
-            image_url: cat.image_url,
-            count: countMap[cat.name] || 0
-          }));
+          // If no categories with products, fallback to product-based categories
+          let categoriesWithDetails;
+          if (categoriesWithProducts.length === 0 && productCounts && productCounts.length > 0) {
+            console.log('⚠️ No categories with products found, creating from product data...');
+            // Create categories from product data
+            const productCategoryMap = new Map<string, { count: number; image_url?: string }>();
+            productCounts.forEach((p: any) => {
+              if (p.category) {
+                const existing = productCategoryMap.get(p.category) || { count: 0 };
+                productCategoryMap.set(p.category, {
+                  count: existing.count + 1,
+                  // No image available from this query
+                });
+              }
+            });
+            
+            categoriesWithDetails = Array.from(productCategoryMap.entries()).map(([name, data]) => ({
+              name: name,
+              icon: iconMap[name ? name.toLowerCase() : ''] || '🛍️',
+              count: data.count
+            })).filter(cat => cat.name && cat.count > 0);
+          } else {
+            categoriesWithDetails = categoriesWithProducts.map((cat: any) => ({
+              name: cat.name,
+              icon: iconMap[cat.name.toLowerCase()] || '🛍️',
+              image_url: cat.image_url,
+              count: countMap[cat.name] || 0
+            }));
+          }
           
           console.log('✅ Categories from categories table (with products only):', categoriesWithDetails);
           setCategories(categoriesWithDetails);
